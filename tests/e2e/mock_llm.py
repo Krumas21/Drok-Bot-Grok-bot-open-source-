@@ -62,12 +62,13 @@ async def completions(request: Request):
                                              "evidence": "/workspace/e2e-goal.txt now exists"})
         if call["name"] == "shell" and "background process #" in result:
             pid = result.split("background process #", 1)[1].split()[0]
-            return reply("", "process", {"action": "log", "id": pid})
-        if call["name"] == "process" and "bg-done" not in result:  # still running: poll again
-            return reply("", "process", json.loads(call["arguments"]))
+            return reply("", "process", {"action": "wait", "id": pid, "timeout": 30})
         return reply(f"Done. Tool said:\n```\n{result[:600]}\n```")
     said = text_of(last)
-    cmd = said.split("]: ", 1)[-1].strip().removeprefix("TASK:").strip().splitlines()[0] if said.strip() else ""
+    body = said.split("]: ", 1)[-1].strip().removeprefix("TASK:").strip()
+    lines = [ln.strip() for ln in body.splitlines() if ln.strip()]
+    # Routines/webhooks put a header line first; workers get "TASK:\n..." - the command is the first e2e line.
+    cmd = next((ln for ln in lines if ln.startswith("e2e")), lines[0] if lines else "")
     if said.startswith("[Goal #"):
         return reply("Working on the goal.", "write_file", {"path": "/workspace/e2e-goal.txt", "content": "goal done"})
     if cmd.startswith("e2e goal"):

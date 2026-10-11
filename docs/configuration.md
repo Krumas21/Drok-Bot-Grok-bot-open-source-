@@ -24,7 +24,7 @@ Everything that needs a restart lives in `.env` (start from `.env.example`, or r
 | `TZ` | `UTC` | Default timezone (prompts, routines). |
 | `DROK_PORT` / `DROK_BIND` | `8080` / `0.0.0.0` | Where the UI listens on the host. |
 | `DROK_PUBLIC_URL` | `http://localhost:8080` | Base for links sent on Telegram. |
-| `BRAVE_API_KEY` or `SEARXNG_URL` | - | Enables the `web_search` tool. Without it agents search through the browser. |
+| `BRAVE_API_KEY` or `SEARXNG_URL` | - | Search backend for `web_search`. Without it a keyless DuckDuckGo fallback is used (fine for light use, can get rate-limited). |
 | `DROK_STT_MODEL` | - | Speech-to-text for Telegram voice notes, e.g. `openai/whisper-1` or `groq/whisper-large-v3`. |
 | `DROK_TTS_MODEL` / `DROK_TTS_VOICE` | - / `alloy` | Voice replies to voice notes, e.g. `openai/gpt-4o-mini-tts`. |
 | `DROK_SECRET_KEY` | generated | Fernet key for secrets. Generated into `data/.secret.key` if unset. |

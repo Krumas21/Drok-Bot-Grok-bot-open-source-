@@ -120,7 +120,7 @@ def build(app, agent: dict, turn: dict) -> list[dict]:
     conv = app.conversation(turn["conversation_id"])
     upto = turn["meta"].get("message_id") or 10**12
     limit = GOAL_HISTORY if turn["source"] == "goal" else HISTORY
-    rows = db.all("SELECT * FROM messages WHERE conversation_id = ? AND id <= ? AND kind IN ('text','handoff') "
+    rows = db.all("SELECT * FROM messages WHERE conversation_id = ? AND id <= ? AND kind IN ('text','handoff','question') "
                   "ORDER BY id DESC LIMIT ?", turn["conversation_id"], upto, limit)
     history = []
     for m in reversed(rows):

@@ -127,6 +127,11 @@ async def test_clarify_ends_turn_with_a_question(app):
     q = messages(app, conv, "question")
     assert t["status"] == "done" and q[0]["meta"]["options"] == ["Vilnius", "Kaunas"]
     assert len(app.llm.script) == 1  # no extra model call after asking
+    app.runtime.user_message(conv, "Kaunas")
+    answer = app.db.one("SELECT * FROM turns WHERE status = 'queued'")
+    history = context.build(app, app.agent("chief"), answer)
+    assert history[-2] == {"role": "assistant", "content": "Which city?"}  # the agent sees what it asked
+    assert history[-1]["content"] == "Kaunas"
 
 
 async def test_update_my_instructions_needs_approval(app):

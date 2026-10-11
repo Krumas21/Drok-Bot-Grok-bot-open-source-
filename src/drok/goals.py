@@ -120,6 +120,8 @@ class Goals:
             self.set_status(gid, "blocked", reason)
             return "Goal marked blocked; the owner has been told. End your turn."
         if status == "done":
+            state["claim"] = (fields.get("evidence") or fields.get("progress") or "")[:4000]
+            self.db.update("goals", gid, state=state)
             return "Completion claimed - the verifier will check your evidence after this turn ends."
         if status == "active" and goal["status"] == "blocked":
             self.set_status(gid, "active", "unblocked by the agent")
@@ -185,9 +187,13 @@ class Goals:
                 self.set_status(gid, "blocked", f"{failures} turns in a row failed (model/provider errors)")
             return
         values["failures"] = 0
-        claimed = _claimed_done(turn)
         self.db.update("goals", gid, **values)
         goal = self.get(gid)
+        state = dict(goal["state"])
+        claimed = state.pop("claim", None)
+        if claimed is not None:  # consume the claim so it is judged exactly once
+            self.db.update("goals", gid, state=state)
+            goal["state"] = state
         if goal["status"] != "active":
             return
         if claimed is not None:
@@ -247,19 +253,3 @@ def _norm_plan(plan) -> list[dict]:
         out.append({"id": int(p.get("id", n)), "text": str(p.get("text", ""))[:300],
                     "status": status if status in ("pending", "in_progress", "done", "blocked") else "pending"})
     return out[:40]
-
-
-def _claimed_done(turn: dict) -> str | None:
-    """The evidence from a goal_update(status=done) call in this turn, if the agent claimed completion."""
-    msgs = json.loads(json.dumps(turn.get("llm_messages") or []))
-    for m in msgs:
-        for c in m.get("tool_calls") or []:
-            if c["function"]["name"] != "goal_update":
-                continue
-            try:
-                args = json.loads(c["function"]["arguments"] or "{}")
-            except ValueError:
-                continue
-            if args.get("status") == "done":
-                return str(args.get("evidence") or args.get("progress") or "")
-    return None

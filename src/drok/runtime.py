@@ -438,7 +438,9 @@ class Runtime:
         self._after(turn, "done", text)
         self.spawn(self._summarize(turn["conversation_id"], agent))
         calls = _count_calls(msgs)
-        if self.app.settings.learning and (calls >= REFLECT_AFTER_CALLS or (
+        # Goal turns are long by nature; reflecting after each one would mostly re-learn the same thing.
+        threshold = REFLECT_AFTER_CALLS * (3 if turn["source"] == "goal" else 1)
+        if self.app.settings.learning and (calls >= threshold or (
                 turn["source"] in ("web", "telegram", "user") and CORRECTION.search(turn["trigger"]))):
             self.spawn(self.app.memory.reflect(agent, turn, msgs, calls))
 

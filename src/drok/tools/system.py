@@ -1,11 +1,13 @@
 """Shell (foreground and background), workspace files, search, and document creation."""
 
+import asyncio
 import base64
 import csv
 import difflib
 import io
 import json
 import shlex
+import time
 import uuid
 from pathlib import Path
 
@@ -56,7 +58,7 @@ async def shell(ctx: ToolContext, command: str, timeout: int = 120, background: 
     return f"exit code: {r['exit_code']}\n{_clip(r['output'])}"
 
 
-async def process(ctx: ToolContext, action: str = "list", id: str = "", lines: int = 60) -> str:
+async def process(ctx: ToolContext, action: str = "list", id: str = "", lines: int = 60, timeout: int = 120) -> str:
     c = ctx.app.computer
     if action == "list":
         rows = (await c.bg("list"))["processes"]
@@ -64,14 +66,19 @@ async def process(ctx: ToolContext, action: str = "list", id: str = "", lines: i
                          f"{p['runtime']}s - {p['command']}" for p in rows) or "No background processes."
     if not id:
         return "Pass the process id."
-    if action in ("log", "status"):
-        r = await c.bg("log", id=id, lines=min(max(lines, 1), 400))
+    if action in ("log", "status", "wait"):
+        deadline = time.monotonic() + min(max(timeout, 1), 600)
+        while True:
+            r = await c.bg("log", id=id, lines=min(max(lines, 1), 400))
+            if action != "wait" or not r["running"] or time.monotonic() >= deadline:
+                break
+            await asyncio.sleep(2)
         state = "running" if r["running"] else f"finished (exit {r['exit_code']})"
         return f"#{id} {state}, {r['runtime']}s\n{r['log']}"
     if action == "kill":
         await c.bg("kill", id=id)
         return f"Killed #{id}."
-    return "action must be list, status, log or kill."
+    return "action must be list, status, log, wait or kill."
 
 
 async def read_file(ctx: ToolContext, path: str, offset: int = 0) -> str | ToolResult:
@@ -231,9 +238,11 @@ def tools(app) -> list[Tool]:
                     background={"type": "boolean", "description": "Run detached and return immediately"}),
              shell, risk="risky", subject=lambda a: a.get("command", ""), timeout=1830),
         Tool("process", "Manage background processes started with shell(background=true): list, status/log "
-             "(tail of output), kill.",
-             params([], action=s("list|status|log|kill"), id=s("Process id"), lines=i("Log lines, default 60")),
-             process, risk="safe", subject=lambda a: f"{a.get('action', 'list')} {a.get('id', '')}"),
+             "(tail of output), wait (block until it exits or `timeout` seconds pass, max 600), kill. For waits "
+             "longer than 10 minutes use wake_me instead.",
+             params([], action=s("list|status|log|wait|kill"), id=s("Process id"), lines=i("Log lines, default 60"),
+                    timeout=i("Seconds to wait (action=wait), default 120")),
+             process, risk="safe", timeout=630, subject=lambda a: f"{a.get('action', 'list')} {a.get('id', '')}"),
         Tool("read_file", "Read a file from /workspace: text (with offset paging), images (viewed), or PDF/DOCX/PPTX/"
              "XLSX (converted to text).",
              params(["path"], path=s("Path, e.g. /workspace/notes.md"), offset=i("Char offset for long files")),

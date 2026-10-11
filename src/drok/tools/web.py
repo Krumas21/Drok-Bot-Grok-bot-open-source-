@@ -122,7 +122,8 @@ async def _render(ctx: ToolContext, url: str, selector: str, max_chars: int) -> 
         except Exception:
             pass  # long-polling sites never go idle; the DOM is good enough
         if selector:
-            items = await page.eval_on_selector_all(selector, "els => els.map(e => e.innerText.trim()).filter(Boolean)")
+            items = await page.eval_on_selector_all(
+                selector, "els => els.map(e => (e.innerText || e.textContent || '').trim()).filter(Boolean)")
             return f"## {page.url} - {len(items)} matches for {selector}\n" + "\n---\n".join(items)[:max_chars]
         html = await page.content()
         title, body = html_to_markdown(html, page.url)
