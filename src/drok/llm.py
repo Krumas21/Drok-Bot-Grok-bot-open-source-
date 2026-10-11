@@ -9,7 +9,7 @@ import os
 import re
 from dataclasses import dataclass
 
-from openai import AsyncOpenAI
+from openai import AsyncOpenAI, BadRequestError
 
 from .db import DB, now
 
@@ -99,7 +99,7 @@ class LLM:
 
     async def chat(
         self, model: str, messages: list[dict], tools: list[dict] | None = None,
-        fallbacks: list[str] = (), agent_id: str = "",
+        fallbacks: list[str] = (), agent_id: str = "", reasoning: str = "",
     ) -> tuple[dict, str]:
         """Returns (assistant message dict, model actually used). Tries fallbacks in order."""
         errors = []
@@ -109,7 +109,16 @@ class LLM:
                 kwargs = {"model": name, "messages": messages}
                 if tools:
                     kwargs["tools"] = tools
-                resp = await self.client(provider).chat.completions.create(**kwargs)
+                if reasoning in ("low", "medium", "high"):
+                    kwargs["reasoning_effort"] = reasoning
+                try:
+                    resp = await self.client(provider).chat.completions.create(**kwargs)
+                except BadRequestError:
+                    if "reasoning_effort" not in kwargs:
+                        raise
+                    # Not every model takes a reasoning effort; retry plainly rather than failing the turn.
+                    kwargs.pop("reasoning_effort")
+                    resp = await self.client(provider).chat.completions.create(**kwargs)
                 if not resp.choices:
                     raise LLMError("empty response")
                 self._record(agent_id, spec, resp.usage)

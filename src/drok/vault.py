@@ -29,7 +29,13 @@ class Vault:
         self.db.run("DELETE FROM secrets WHERE name = ?", name)
 
     def names(self) -> list[dict]:
-        return self.db.all("SELECT name, description, created_at FROM secrets ORDER BY name")
+        """Secrets agents may reference. Names starting with '_' are managed by Drok itself (e.g. OAuth tokens)."""
+        return self.db.all("SELECT name, description, created_at FROM secrets WHERE name NOT LIKE '\\_%' ESCAPE '\\' "
+                           "ORDER BY name")
+
+    def get(self, name: str) -> str | None:
+        row = self.db.one("SELECT value FROM secrets WHERE name = ?", name)
+        return self.fernet.decrypt(row["value"].encode()).decode() if row else None
 
     def _values(self) -> dict[str, str]:
         return {

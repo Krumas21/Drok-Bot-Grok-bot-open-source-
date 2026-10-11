@@ -24,17 +24,29 @@ class FakeLLM(LLM):
         self.script: list[dict] = []
         self.seen: list[list[dict]] = []
         self.verdict = '{"decision": "allow", "reason": "fine"}'
+        self.reflection = '{"memory": [], "skill": null, "instructions": null}'
+        self.verification = '{"verdict": "done", "reason": "evidence matches"}'
+        self.prompts: list[tuple[str, str]] = []
 
-    async def chat(self, model, messages, tools=None, fallbacks=(), agent_id=""):
+    async def chat(self, model, messages, tools=None, fallbacks=(), agent_id="", reasoning=""):
         self.seen.append(messages)
         if not self.script:
             return say("(script exhausted)"), model
         return self.script.pop(0), model
 
     async def text(self, model, system, prompt, agent_id=""):
-        if isinstance(self.verdict, Exception):
-            raise self.verdict
-        return self.verdict
+        self.prompts.append((system, prompt))
+        if "safety reviewer" in system:
+            if isinstance(self.verdict, Exception):
+                raise self.verdict
+            return self.verdict
+        if "self-improvement" in system:
+            return self.reflection
+        if "verify whether" in system:
+            return self.verification
+        if "checkpoint" in system:
+            return "## Goal\ncompressed summary"
+        return "summary"
 
 
 class FakeComputer:
@@ -47,6 +59,15 @@ class FakeComputer:
     async def exec(self, command, timeout=120, cwd="/workspace", screen=1):
         self.commands.append(command)
         return {"exit_code": 0, "output": f"ran: {command}"}
+
+    async def bg_start(self, command, screen=1, cwd="/workspace"):
+        self.commands.append(f"&{command}")
+        return {"id": "1", "log": "/tmp/drok-bg/1.log"}
+
+    async def bg(self, action, **body):
+        if action == "list":
+            return {"processes": [{"id": "1", "command": "sleep 5", "running": True, "exit_code": None, "runtime": 3}]}
+        return {"id": "1", "running": False, "exit_code": 0, "runtime": 5, "log": "done"}
 
     async def screenshot(self, screen):
         return "iVBORw0KGgo="

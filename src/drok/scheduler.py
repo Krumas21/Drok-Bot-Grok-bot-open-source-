@@ -127,7 +127,14 @@ class Scheduler:
                 self.fire(r)
             except ValueError as e:
                 log.warning("routine %s not fired: %s", r["id"], e)
+        self.app.goals.tick()
         self.check_absence(t)
+        if t - (self.db.get_kv("skills_curated_at") or 0) > 86400:
+            self.db.set_kv("skills_curated_at", t)
+            archived = self.app.skills.curate()
+            if archived:
+                self.app.bus.publish({"type": "notice", "text": f"Curator archived unused skills: {', '.join(archived)} "
+                                      "(restore them on the Skills page)."})
 
     def check_absence(self, t: float) -> None:
         """Like Grok Bot: if the owner disappears, routines pause instead of running unattended forever."""

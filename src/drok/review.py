@@ -37,6 +37,18 @@ DEFAULT_RULES = [
     ("browser", "tabs*", "allow", ""),
 ]
 
+# Rules added in later versions; installs that already seeded v1 get these on upgrade (once).
+RULES_V2 = [
+    ("gmail_send", "*", "ask", "Sends email as you"),
+    ("calendar_create_event", "*", "ask", "Creates events and sends invitations"),
+    ("update_my_instructions", "*", "ask", "Agents rewriting their own instructions need your OK"),
+    ("tool_create", "*", "ask", "New self-built tools run code later - confirm what they do"),
+    ("tool_update", "*", "ask", "Changes a self-built tool"),
+    ("gmail_draft", "*", "allow", "Drafts are only saved, never sent"),
+    ("drive_create_folder", "*", "allow", ""),
+]
+RULESETS = {1: DEFAULT_RULES, 2: RULES_V2}
+
 REVIEWER_SYSTEM = """You are the safety reviewer for an autonomous AI agent that runs unattended on its owner's \
 home server. Judge ONE proposed tool call. Reply with JSON only: {"decision": "allow"|"ask"|"deny", "reason": "<short>"}.
 
@@ -56,10 +68,11 @@ class Reviewer:
         self.llm = llm
         self.reviewer_model = reviewer_model
         self.enabled = enabled
-        if not db.one("SELECT id FROM rules LIMIT 1") and not db.get_kv("rules_seeded"):
-            for tool, subject, action, note in DEFAULT_RULES:
+        seeded = db.get_kv("rules_version") or (1 if db.get_kv("rules_seeded") else 0)
+        for version in sorted(v for v in RULESETS if v > seeded):
+            for tool, subject, action, note in RULESETS[version]:
                 db.insert("rules", tool=tool, subject=subject, action=action, note=note, created_at=now())
-            db.set_kv("rules_seeded", True)
+        db.set_kv("rules_version", max(RULESETS))
 
     def match(self, tool: str, subject: str) -> dict | None:
         hits = [

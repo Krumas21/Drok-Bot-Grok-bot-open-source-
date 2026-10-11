@@ -1,6 +1,7 @@
 ---
 name: morning-briefing
 description: Compile a short morning briefing (calendar, inbox highlights, task status, news on watched topics) and send it to the owner on Telegram.
+created_by: seed
 ---
 
 ## When to use

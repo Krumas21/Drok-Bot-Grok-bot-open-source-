@@ -1,34 +1,9 @@
-"""Tools that touch Drok itself: memory, teammates, skills, routines, secrets and the owner."""
+"""Tools that touch Drok itself: teammates, workers, skills, routines, secrets and the owner."""
 
 import re
 
-from ..db import now
+from .. import delegate as delegation
 from . import Tool, ToolContext, i, params, s
-
-
-async def memory_save(ctx: ToolContext, content: str, shared: bool = False) -> str:
-    mid = ctx.app.db.insert("memories", agent_id=None if shared else ctx.agent["id"], content=content.strip(),
-                            created_at=now())
-    return f"Saved memory #{mid}{' (shared with the team)' if shared else ''}."
-
-
-async def memory_search(ctx: ToolContext, query: str) -> str:
-    words = re.findall(r"\w+", query)
-    if not words:
-        return "Empty query."
-    fts = " OR ".join(f'"{w}"' for w in words)
-    rows = ctx.app.db.all(
-        "SELECT m.id, m.agent_id, m.content FROM memories_fts f JOIN memories m ON m.id = f.rowid "
-        "WHERE memories_fts MATCH ? AND (m.agent_id = ? OR m.agent_id IS NULL) ORDER BY rank LIMIT 15",
-        fts, ctx.agent["id"],
-    )
-    return "\n".join(f"[{r['id']}] {r['content']}" for r in rows) or "Nothing found."
-
-
-async def memory_forget(ctx: ToolContext, memory_id: int) -> str:
-    ctx.app.db.run("DELETE FROM memories WHERE id = ? AND (agent_id = ? OR agent_id IS NULL)", memory_id,
-                   ctx.agent["id"])
-    return f"Forgot #{memory_id}."
 
 
 async def message_agent(ctx: ToolContext, agent: str, message: str) -> str:
@@ -40,14 +15,52 @@ async def message_agent(ctx: ToolContext, agent: str, message: str) -> str:
     return ctx.app.runtime.handoff(ctx.agent, target, message, ctx.conversation_id, ctx.turn["meta"].get("hops", 0))
 
 
-async def skill_read(ctx: ToolContext, name: str) -> str:
-    skill = ctx.app.skills.read(name)
-    return skill["body"] if skill else f"No skill '{name}'."
+async def delegate(ctx: ToolContext, tasks: list) -> str:
+    return await delegation.run(ctx, [t if isinstance(t, dict) else {"task": str(t)} for t in tasks])
 
 
-async def skill_save(ctx: ToolContext, name: str, description: str, instructions: str) -> str:
-    slug = ctx.app.skills.save(name, description, instructions)
-    return f"Saved skill '{slug}'. The whole team can use it."
+async def skill_view(ctx: ToolContext, name: str, file: str = "") -> str:
+    try:
+        return ctx.app.skills.view(name, file)
+    except ValueError as e:
+        return f"Error: {e}"
+
+
+async def skill_manage(ctx: ToolContext, action: str, name: str, description: str = "", content: str = "",
+                       old_string: str = "", new_string: str = "", file_path: str = "", file_content: str = "") -> str:
+    sk = ctx.app.skills
+    try:
+        if action == "create":
+            if sk.read(name):
+                return f"Skill '{name}' exists. Use action=patch to improve it."
+            if not (description and content):
+                return "create needs description and content."
+            slug = sk.save(name, description, content, created_by=ctx.agent["id"])
+            warn = sk.lint(sk.read(slug)["raw"])
+            return f"Created /{slug} for the whole team." + (f" Warnings: {'; '.join(warn)}" if warn else "")
+        if action == "patch":
+            diff = sk.patch(name, old_string, new_string)
+            warn = sk.lint(sk.read(name)["raw"])
+            return f"Patched {name}.\n{diff}" + (f"\nWarnings: {'; '.join(warn)}" if warn else "")
+        if action == "rewrite":
+            skill = sk.read(name)
+            if not skill:
+                return f"No skill '{name}'."
+            sk.save(name, description or skill.get("description", ""), content,
+                    created_by=skill.get("created_by", ctx.agent["id"]))
+            return f"Rewrote {name}."
+        if action == "write_file":
+            sk.write_file(name, file_path, file_content)
+            return f"Wrote {file_path} in skill {name}."
+        if action == "remove_file":
+            sk.remove_file(name, file_path)
+            return f"Removed {file_path} from skill {name}."
+        if action == "archive":
+            sk.archive(name)
+            return f"Archived {name} (restorable from the Skills page)."
+    except ValueError as e:
+        return f"Error: {e}"
+    return f"Unknown action '{action}'. Use create, patch, rewrite, write_file, remove_file or archive."
 
 
 async def routine_create(ctx: ToolContext, name: str, instructions: str, schedule: str, timezone: str = "",
@@ -109,41 +122,52 @@ async def request_takeover(ctx: ToolContext, reason: str) -> str:
 
 async def notify_owner(ctx: ToolContext, text: str, file: str = "") -> str:
     tg = ctx.app.telegram
-    if not tg:
-        ctx.app.runtime.post(ctx.conversation_id, ctx.agent["id"], text, kind="text")
-        return "Telegram is not configured; posted in the web UI instead."
     path = None
     if file:
         from .system import _ws_path
         path = _ws_path(ctx, file)
         if not path.is_file():
             return f"File not found: {file}"
+    ctx.app.runtime.post(ctx.conversation_id, ctx.agent["id"], text + (f"\n\n📎 {file}" if file else ""),
+                         meta={"source": "notify", "telegram_sent": bool(tg)})
+    if not tg:
+        return "Telegram is not configured; posted in the web UI instead."
     await tg.send(f"{ctx.agent['name']}: {text}", file=path)
     return "Sent to the owner on Telegram."
 
 
 def tools(app) -> list[Tool]:
     t = {"trusted": True}
+    task = {"type": "object", "properties": {
+        "task": s("Self-contained task for one worker"),
+        "context": s("Everything the worker needs: inputs, paths, constraints, definition of done"),
+        "output_format": s("Optional shape of the report, e.g. 'JSON list of {name, url, price}'")},
+        "required": ["task"]}
     return [
-        Tool("memory_save", "Save a durable fact (owner preference, decision, account detail, lesson learned). "
-             "shared=true makes it visible to the whole team.",
-             params(["content"], content=s("The fact, one or two sentences"), shared={"type": "boolean"}),
-             memory_save, risk="safe", extra=t),
-        Tool("memory_search", "Search your memory and the team's shared memory.", params(["query"], query=s("Words")),
-             memory_search, risk="safe", extra=t),
-        Tool("memory_forget", "Delete an outdated or wrong memory by id.", params(["memory_id"], memory_id=i("Id")),
-             memory_forget, risk="safe", extra=t),
         Tool("message_agent", "Hand a task or question to a teammate (async). Give full context: goal, inputs, "
              "file paths, definition of done. Their reply comes back to you as a new message.",
              params(["agent", "message"], agent=s("Teammate id or name"), message=s("Self-contained request")),
              message_agent, risk="safe", extra=t, subject=lambda a: f"{a.get('agent')}: {a.get('message', '')[:200]}"),
-        Tool("skill_read", "Read a skill (saved procedure) from the library.", params(["name"], name=s("Skill slug")),
-             skill_read, risk="safe", extra=t),
-        Tool("skill_save", "Save a reusable procedure to the team's skill library. Include: when to use, inputs and "
-             "access needed, steps, how to validate, what to return, and what needs owner approval.",
-             params(["name", "description", "instructions"], name=s("Short name"),
-                    description=s("One line: what it does and when to use it"), instructions=s("Markdown body")),
-             skill_save, risk="safe", extra=t),
+        Tool("delegate", "Run 1-6 sub-tasks in parallel on isolated workers that use your tools and return only "
+             "their final reports. Use for parallel research, bulk processing, or keeping long side-quests out of "
+             "your context. Workers start with zero context - brief them completely. They can't ask the owner or get "
+             "approvals.",
+             params(["tasks"], tasks={"type": "array", "items": task}),
+             delegate, risk="safe", extra=t, timeout=1800,
+             subject=lambda a: f"{len(a.get('tasks') or [])} workers: "
+                               f"{'; '.join(str((x or {}).get('task', x))[:60] for x in (a.get('tasks') or []))}"),
+        Tool("skill_view", "Load a skill from the library (its procedure), or one of its supporting files.",
+             params(["name"], name=s("Skill slug"), file=s("Optional file, e.g. references/api.md")),
+             skill_view, risk="safe", extra=t),
+        Tool("skill_manage", "Grow the team's skill library. action=create (name, description, content) for a new "
+             "procedure; patch (old_string -> new_string) to fix or add a lesson; rewrite (content); write_file / "
+             "remove_file (file_path under references/, scripts/, templates/, assets/); archive. Skills hold: When to "
+             "use, Inputs, Steps, Validate, Return, Needs approval, Pitfalls.",
+             params(["action", "name"], action=s("create|patch|rewrite|write_file|remove_file|archive"),
+                    name=s("Skill name (kebab-case)"), description=s("One line: what + when"),
+                    content=s("Markdown body"), old_string=s("Exact text to replace"), new_string=s("Replacement"),
+                    file_path=s("Supporting file path"), file_content=s("Supporting file content")),
+             skill_manage, risk="safe", extra=t, subject=lambda a: f"{a.get('action')} {a.get('name')}"),
         Tool("routine_create", "Schedule recurring work (cron, min 5 minutes apart). Confirm with the owner: owner "
              "agent, schedule + timezone, inputs, expected result, approval boundary, what to do if a source is missing.",
              params(["name", "instructions", "schedule"], name=s("Name"),
@@ -163,8 +187,8 @@ def tools(app) -> list[Tool]:
         Tool("request_takeover", "Ask the owner to take control of your screen for a step only a human should do "
              "(login, 2FA, CAPTCHA, payment). Leave the page ready first.",
              params(["reason"], reason=s("Exactly what they need to do")), request_takeover, risk="safe", extra=t),
-        Tool("notify_owner", "Message the owner on Telegram right now (progress, results, alerts), optionally with a "
-             "file from /workspace.",
+        Tool("notify_owner", "Message the owner right now on Telegram (and in the web UI): progress, results, alerts - "
+             "optionally with a file from /workspace.",
              params(["text"], text=s("Message"), file=s("Optional /workspace path to attach")),
              notify_owner, risk="safe", extra=t),
     ]

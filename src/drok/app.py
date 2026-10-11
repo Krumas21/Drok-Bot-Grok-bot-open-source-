@@ -36,12 +36,15 @@ def parse_frontmatter(text: str) -> tuple[dict, str]:
 
 class App:
     def __init__(self, settings: Settings, llm: LLM | None = None, computer: Computer | None = None):
+        from .goals import Goals
         from .mcp_client import MCPManager
+        from .memory import Memory
         from .runtime import Runtime
         from .scheduler import Scheduler
         from .skills import Skills
         from .teach import Teacher
         from .tools.computer import Browsers
+        from .tools.google import Google
 
         self.settings = settings
         self.db = DB(settings.data_dir / "drok.db")
@@ -51,7 +54,11 @@ class App:
         self.reviewer = Reviewer(self.db, self.llm, settings.reviewer_model, settings.auto_review)
         self.computer = computer or Computer(settings.computer_url, settings.computer_token, settings.screens)
         self.browsers = Browsers(self.computer)
-        self.skills = Skills(settings.data_dir / "skills", SEEDS / "skills")
+        self.skills = Skills(settings.workspace / ".skills", SEEDS / "skills", self.db,
+                             legacy_root=settings.data_dir / "skills")
+        self.memory = Memory(self)
+        self.goals = Goals(self)
+        self.google = Google(self)
         self.mcp = MCPManager(self)
         self.runtime = Runtime(self)
         self.scheduler = Scheduler(self)
@@ -166,16 +173,36 @@ class App:
         return self.db.all("SELECT * FROM conversations WHERE kind = 'group' ORDER BY created_at")
 
     # ---------- tools ----------
-    def all_tools(self) -> dict[str, Tool]:
-        from .tools import computer, system, team
+    def builtin_tools(self) -> list[Tool]:
+        from .tools import computer, custom, google, mind, system, team, web
 
-        tools = [*system.tools(self), *computer.tools(self), *team.tools(self), *self.mcp.tools()]
+        return [*mind.tools(self), *system.tools(self), *web.tools(self), *computer.tools(self), *team.tools(self),
+                *custom.management_tools(self), *google.tools(self)]
+
+    def all_tools(self) -> dict[str, Tool]:
+        from .tools import custom
+
+        tools = [*self.builtin_tools(), *custom.registered(self), *self.mcp.tools()]
         return {t.name: t for t in tools}
 
     def tools_for(self, agent: dict) -> dict[str, Tool]:
         patterns = agent["tools"] or ["*"]
         allowed = {n: t for n, t in self.all_tools().items() if any(fnmatchcase(n, p) for p in patterns)}
         return allowed
+
+    def aux_model(self, agent: dict | None) -> str:
+        """Model for background work (summaries, compression, reflection, verification)."""
+        return self.settings.aux_model or self.settings.reviewer_model or (agent or {}).get("model") \
+            or self.settings.default_model
+
+    def connections(self) -> list[str]:
+        out = []
+        email = self.google.email()
+        if email:
+            out.append(f"Google as {email} (gmail_*, drive_*, calendar_* tools)")
+        for name, defs in self.mcp.tool_defs.items():
+            out.append(f"MCP '{name}' ({len(defs)} tools, named mcp_{name}_*)")
+        return out
 
     def touch_user(self) -> None:
         """User was here: keeps routines from auto-pausing for absence."""

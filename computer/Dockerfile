@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-dejavu-core fonts-liberation fonts-noto-color-emoji \
         ca-certificates curl wget git jq unzip zip procps sudo less nano xterm \
         python3 python3-pip python3-venv nodejs npm build-essential \
+        pandoc poppler-utils ripgrep python3-openpyxl python3-docx python3-requests python3-bs4 \
     && rm -rf /var/lib/apt/lists/*
 
 # The container is the sandbox: agents get passwordless sudo inside it, nothing outside it.

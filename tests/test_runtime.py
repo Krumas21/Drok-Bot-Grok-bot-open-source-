@@ -102,7 +102,7 @@ async def test_handoff_round_trip(app):
 
 async def test_new_owner_message_is_absorbed_into_running_turn(app):
     conv = app.dm("scout")["id"]
-    app.llm.script = [call("memory_save", {"content": "likes tea"}), say("Noted both.")]
+    app.llm.script = [call("memory", {"action": "add", "content": "likes tea"}), say("Noted both.")]
     app.runtime.user_message(conv, "remember I like tea")
     app.runtime.user_message(conv, "and coffee")
     t = await run_next(app, "scout")

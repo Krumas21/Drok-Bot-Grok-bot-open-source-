@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 class ToolResult:
     text: str
     image: str | None = None  # base64 PNG, shown to vision models
+    stop: bool = False  # end the turn after this call (e.g. a question was put to the owner)
 
 
 @dataclass

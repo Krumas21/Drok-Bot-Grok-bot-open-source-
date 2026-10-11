@@ -1,6 +1,7 @@
 ---
 name: web-research
 description: Research a question on the web with cross-checked sources and write a cited brief to /workspace/research.
+created_by: seed
 ---
 
 ## When to use

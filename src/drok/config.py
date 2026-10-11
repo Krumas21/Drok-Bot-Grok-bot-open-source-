@@ -50,6 +50,12 @@ class Settings:
     searxng_url: str = ""
     timezone: str = "UTC"
     owner_name: str = "the owner"
+    aux_model: str = ""          # summaries, compression, reflection, goal verification
+    context_chars: int = 320_000  # ~80k tokens: compress long turns beyond this
+    learning: bool = True         # post-turn reflection that writes memory and skills
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = ""
 
 
 def load() -> Settings:
@@ -87,4 +93,10 @@ def load() -> Settings:
         searxng_url=_env("SEARXNG_URL").rstrip("/"),
         timezone=_env("TZ", "UTC") or "UTC",
         owner_name=_env("DROK_OWNER_NAME", "the owner"),
+        aux_model=_env("DROK_AUX_MODEL"),
+        context_chars=int(_env("DROK_CONTEXT_CHARS", "320000")),
+        learning=_env("DROK_LEARNING", "on").lower() not in ("off", "0", "false", "no"),
+        google_client_id=_env("GOOGLE_CLIENT_ID"),
+        google_client_secret=_env("GOOGLE_CLIENT_SECRET"),
+        google_redirect_uri=_env("GOOGLE_REDIRECT_URI"),
     )

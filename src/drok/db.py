@@ -152,9 +152,74 @@ CREATE TABLE IF NOT EXISTS kv (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS goals (
+    id INTEGER PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    objective TEXT NOT NULL,
+    done_when TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'active', -- active | paused | blocked | done | failed | cancelled
+    plan TEXT NOT NULL DEFAULT '[]',       -- [{"id", "text", "status"}]
+    state TEXT NOT NULL DEFAULT '{}',      -- progress, next_steps, decisions, files, blocker
+    max_turns INTEGER NOT NULL DEFAULT 30,
+    turns_used INTEGER NOT NULL DEFAULT 0,
+    failures INTEGER NOT NULL DEFAULT 0,
+    check_every INTEGER NOT NULL DEFAULT 0, -- seconds between continuations; 0 = keep going
+    next_run_at REAL,
+    created_by TEXT NOT NULL DEFAULT 'owner',
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL,
+    finished_at REAL
+);
+CREATE TABLE IF NOT EXISTS goal_events (
+    id INTEGER PRIMARY KEY,
+    goal_id INTEGER NOT NULL,
+    kind TEXT NOT NULL,       -- created | progress | verify | blocked | status | note
+    text TEXT NOT NULL,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS wakeups (
+    id INTEGER PRIMARY KEY,
+    agent_id TEXT NOT NULL,
+    conversation_id INTEGER NOT NULL,
+    due_at REAL NOT NULL,
+    note TEXT NOT NULL,
+    fired INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS skill_usage (
+    slug TEXT PRIMARY KEY,
+    uses INTEGER NOT NULL DEFAULT 0,
+    patches INTEGER NOT NULL DEFAULT 0,
+    last_used REAL,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS custom_tools (
+    name TEXT PRIMARY KEY,
+    description TEXT NOT NULL,
+    parameters TEXT NOT NULL DEFAULT '{}', -- JSON schema
+    command TEXT NOT NULL,                 -- runs on the computer; args arrive as JSON on stdin
+    created_by TEXT NOT NULL,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    uses INTEGER NOT NULL DEFAULT 0,
+    created_at REAL NOT NULL,
+    updated_at REAL NOT NULL
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(content, content='messages', content_rowid='id');
+CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages WHEN new.kind IN ('text','handoff','question') BEGIN
+    INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+END;
 """
 
-JSON_COLUMNS = {"fallbacks", "tools", "members", "meta", "llm_messages", "args", "env"}
+# Columns added after a table first shipped: (table, column, declaration). Applied idempotently on start.
+MIGRATIONS = [
+    ("agents", "reasoning", "TEXT NOT NULL DEFAULT ''"),
+]
+
+JSON_COLUMNS = {"fallbacks", "tools", "members", "meta", "llm_messages", "args", "env", "plan", "state",
+                "parameters"}
 
 
 def now() -> float:
@@ -170,6 +235,15 @@ class DB:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA foreign_keys=ON")
             self.conn.executescript(SCHEMA)
+            for table, column, decl in MIGRATIONS:
+                cols = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+                if column not in cols:
+                    self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            if not self.conn.execute("SELECT 1 FROM kv WHERE key = 'messages_fts_built'").fetchone():
+                # Index messages written before the search index existed.
+                self.conn.execute("INSERT INTO messages_fts(rowid, content) SELECT id, content FROM messages "
+                                  "WHERE kind IN ('text','handoff','question')")
+                self.conn.execute("INSERT INTO kv (key, value) VALUES ('messages_fts_built', 'true')")
 
     @staticmethod
     def _row(row: sqlite3.Row) -> dict:

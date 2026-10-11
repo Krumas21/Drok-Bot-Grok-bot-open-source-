@@ -142,6 +142,51 @@ def do_input(body: dict) -> dict:
     return {"ok": True}
 
 
+BG_DIR = "/tmp/drok-bg"
+bg: dict[str, dict] = {}
+
+
+def bg_start(body: dict) -> dict:
+    os.makedirs(BG_DIR, exist_ok=True)
+    pid = str(len(bg) + 1)
+    log_path = f"{BG_DIR}/{pid}.log"
+    with open(log_path, "wb") as log_file:
+        p = subprocess.Popen(["bash", "-lc", body["command"]], cwd=body.get("cwd") or "/workspace",
+                             env=screen_env(int(body.get("screen", 1))), stdout=log_file, stderr=subprocess.STDOUT,
+                             start_new_session=True)
+    bg[pid] = {"proc": p, "command": body["command"], "log": log_path, "started": time.time()}
+    return {"id": pid, "log": log_path}
+
+
+def _bg_info(pid: str, entry: dict) -> dict:
+    code = entry["proc"].poll()
+    end = entry.get("ended") or time.time()
+    if code is not None and "ended" not in entry:
+        entry["ended"] = end
+    return {"id": pid, "command": entry["command"][:160], "running": code is None, "exit_code": code,
+            "runtime": int(end - entry["started"])}
+
+
+def bg_list(body: dict) -> dict:
+    return {"processes": [_bg_info(k, v) for k, v in bg.items()]}
+
+
+def bg_log(body: dict) -> dict:
+    entry = bg[str(body["id"])]
+    with open(entry["log"], "rb") as f:
+        lines = f.read()[-200_000:].decode(errors="replace").splitlines()[-int(body.get("lines", 60)):]
+    return {**_bg_info(str(body["id"]), entry), "log": "\n".join(lines)}
+
+
+def bg_kill(body: dict) -> dict:
+    entry = bg[str(body["id"])]
+    try:
+        os.killpg(entry["proc"].pid, signal.SIGTERM)
+    except ProcessLookupError:
+        pass
+    return {"ok": True}
+
+
 def recover(body: dict) -> dict:
     with lock:
         stop_all()
@@ -155,7 +200,8 @@ def health() -> dict:
     return {"ok": bool(alive) and all(alive.values()), "screens": SCREENS, "processes": alive}
 
 
-ROUTES = {"/exec": run_exec, "/screenshot": screenshot, "/input": do_input, "/recover": recover}
+ROUTES = {"/exec": run_exec, "/screenshot": screenshot, "/input": do_input, "/recover": recover,
+          "/bg/start": bg_start, "/bg/list": bg_list, "/bg/log": bg_log, "/bg/kill": bg_kill}
 
 
 class Handler(BaseHTTPRequestHandler):

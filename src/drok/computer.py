@@ -36,6 +36,12 @@ class Computer:
         return await self._post("/exec", timeout=timeout + 15, command=command, timeout_s=timeout, cwd=cwd,
                                 screen=screen)
 
+    async def bg_start(self, command: str, screen: int = 1, cwd: str = "/workspace") -> dict:
+        return await self._post("/bg/start", command=command, screen=screen, cwd=cwd)
+
+    async def bg(self, action: str, **body) -> dict:
+        return await self._post(f"/bg/{action}", **body)
+
     async def screenshot(self, screen: int) -> str:
         return (await self._post("/screenshot", screen=screen))["png"]
 
