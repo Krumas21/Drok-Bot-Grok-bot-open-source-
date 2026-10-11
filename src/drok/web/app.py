@@ -9,6 +9,7 @@ import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, Form, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -75,6 +76,7 @@ def create_web(drok: App) -> FastAPI:
             "pending": drok.db.one("SELECT COUNT(*) n FROM approvals WHERE status = 'pending'")["n"],
             "orchestrator": drok.orchestrator(), "agent_map": {a["id"]: a for a in drok.agents()},
             "dm_ids": {a["id"]: drok.dm(a["id"])["id"] for a in drok.agents()},
+            "open_goals": drok.db.one("SELECT COUNT(*) n FROM goals WHERE status IN ('active','blocked')")["n"],
         }
         return templates.TemplateResponse(request, name, {**base, **ctx})
 
@@ -130,7 +132,7 @@ def create_web(drok: App) -> FastAPI:
             drok.db.set_kv(f"read:{cid}", now())
         return page(request, "chat.html", conv=conv, members=members, agent=agent,
                     messages_html=render_messages(request, rows), last_id=rows[-1]["id"] if rows else 0,
-                    skills=drok.skills.list())
+                    skills=drok.skills.list(), goals=drok.goals.active_for(agent["id"]) if agent else [])
 
     @web.get("/c/{cid}/messages", response_class=HTMLResponse)
     async def messages_after(request: Request, cid: int, after: int = 0):
@@ -175,39 +177,46 @@ def create_web(drok: App) -> FastAPI:
         agent = drok.agent(agent_id)
         if not agent:
             raise HTTPException(404)
-        memories = drok.db.all("SELECT * FROM memories WHERE agent_id = ? OR agent_id IS NULL ORDER BY id DESC",
-                               agent_id)
+        mem = drok.memory
         routines = drok.db.all("SELECT * FROM routines WHERE agent_id = ?", agent_id)
+        goals = drok.db.all("SELECT * FROM goals WHERE agent_id = ? ORDER BY id DESC LIMIT 10", agent_id)
+        learned = drok.db.all("SELECT * FROM messages WHERE author = ? AND kind = 'learned' ORDER BY id DESC LIMIT 12",
+                              agent_id)
         tool_names = sorted(drok.all_tools())
-        return page(request, "agent.html", a=agent, memories=memories, routines=routines, tool_names=tool_names,
-                    providers=drok.llm.providers)
+        return page(request, "agent.html", a=agent, own=mem.entries(agent_id), shared=mem.entries(None),
+                    own_usage=mem.usage(agent_id), shared_usage=mem.usage(None), routines=routines, goals=goals,
+                    learned=learned, tool_names=tool_names, providers=drok.llm.providers,
+                    error=request.query_params.get("error", ""))
 
-    def _agent_fields(name, title, description, system_prompt, model, fallbacks, tools) -> dict:
+    def _agent_fields(name, title, description, system_prompt, model, fallbacks, tools, reasoning="") -> dict:
         model = model.strip() or drok.settings.default_model
         split_model(model)
         return {"name": name.strip(), "title": title.strip(), "description": description.strip(),
                 "system_prompt": system_prompt.strip(), "model": model,
+                "reasoning": reasoning if reasoning in ("low", "medium", "high") else "",
                 "fallbacks": [f.strip() for f in fallbacks.split(",") if f.strip()],
                 "tools": [t.strip() for t in tools.split(",") if t.strip()] or ["*"]}
 
     @web.post("/agents")
     async def create_agent(name: str = Form(...), title: str = Form(""), description: str = Form(""),
                            system_prompt: str = Form(""), model: str = Form(""), fallbacks: str = Form(""),
-                           tools: str = Form("*")):
+                           tools: str = Form("*"), reasoning: str = Form("")):
         try:
-            f = _agent_fields(name, title, description, system_prompt, model, fallbacks, tools)
+            f = _agent_fields(name, title, description, system_prompt, model, fallbacks, tools, reasoning)
         except Exception as e:
             raise HTTPException(400, str(e)) from e
+        effort = f.pop("reasoning")
         a = drok.create_agent(**f)
+        drok.db.update("agents", a["id"], reasoning=effort)
         return RedirectResponse(f"/c/{drok.dm(a['id'])['id']}", status_code=303)
 
     @web.post("/agents/{agent_id}")
     async def update_agent(agent_id: str, name: str = Form(...), title: str = Form(""),
                            description: str = Form(""), system_prompt: str = Form(""), model: str = Form(""),
                            fallbacks: str = Form(""), tools: str = Form("*"), screen: int = Form(1),
-                           is_orchestrator: str = Form("")):
+                           is_orchestrator: str = Form(""), reasoning: str = Form("")):
         try:
-            f = _agent_fields(name, title, description, system_prompt, model, fallbacks, tools)
+            f = _agent_fields(name, title, description, system_prompt, model, fallbacks, tools, reasoning)
         except Exception as e:
             raise HTTPException(400, str(e)) from e
         if is_orchestrator:
@@ -236,7 +245,11 @@ def create_web(drok: App) -> FastAPI:
 
     @web.post("/agents/{agent_id}/memory")
     async def add_memory(request: Request, agent_id: str, content: str = Form(...), shared: str = Form("")):
-        drok.db.insert("memories", agent_id=None if shared else agent_id, content=content.strip(), created_at=now())
+        from ..memory import MemoryRefused
+        try:
+            drok.memory.apply(agent_id, "add", "shared" if shared else "agent", content)
+        except MemoryRefused as e:
+            return RedirectResponse(f"/agents/{agent_id}?error={quote(str(e)[:300])}", status_code=303)
         return back(request)
 
     @web.post("/memories/{mid}/delete")
@@ -397,7 +410,23 @@ def create_web(drok: App) -> FastAPI:
     # ---------------- skills ----------------
     @web.get("/skills", response_class=HTMLResponse)
     async def skills_page(request: Request):
-        return page(request, "skills.html", skills=drok.skills.list())
+        return page(request, "skills.html", skills=drok.skills.list(), archived=drok.skills.list(archived=True))
+
+    @web.post("/skills/{slug}/{action}")
+    async def skill_action(request: Request, slug: str, action: str):
+        sk = drok.skills
+        if action == "pin":
+            sk.pin(slug, True)
+        elif action == "unpin":
+            sk.pin(slug, False)
+        elif action == "archive":
+            sk.archive(slug)
+        elif action == "restore":
+            sk.restore(slug)
+        elif action == "delete":
+            sk.delete(slug)
+            return RedirectResponse("/skills", status_code=303)
+        return back(request, "/skills")
 
     @web.get("/skills/{slug}", response_class=HTMLResponse)
     async def skill_page(request: Request, slug: str):
@@ -417,16 +446,14 @@ def create_web(drok: App) -> FastAPI:
         drok.skills.write_raw(new_slug, raw.replace("\r\n", "\n"))
         return RedirectResponse(f"/skills/{new_slug}", status_code=303)
 
-    @web.post("/skills/{slug}/delete")
-    async def delete_skill(slug: str):
-        drok.skills.delete(slug)
-        return RedirectResponse("/skills", status_code=303)
-
     # ---------------- settings ----------------
     @web.get("/settings", response_class=HTMLResponse)
     async def settings_page(request: Request):
         st = drok.settings
         return page(request, "settings.html", st=st, providers=drok.llm.providers,
+                    custom_tools=drok.db.all("SELECT * FROM custom_tools ORDER BY name"),
+                    google_email=drok.google.email(), google_configured=drok.google.configured,
+                    google_redirect=drok.google.redirect_uri(), google_error=request.query_params.get("google_error", ""),
                     rules=drok.db.all("SELECT * FROM rules ORDER BY tool, id"), secrets=drok.vault.names(),
                     mcp=drok.db.all("SELECT * FROM mcp_servers ORDER BY name"), mcp_errors=drok.mcp.errors,
                     mcp_tools={k: len(v) for k, v in drok.mcp.tool_defs.items()},
@@ -525,6 +552,97 @@ def create_web(drok: App) -> FastAPI:
     @web.get("/files")
     async def files_root(request: Request):
         return await files(request, "")
+
+    # ---------------- goals ----------------
+    @web.get("/goals", response_class=HTMLResponse)
+    async def goals_page(request: Request):
+        rows = drok.db.all("SELECT * FROM goals ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'blocked' THEN 1 "
+                           "WHEN 'paused' THEN 2 ELSE 3 END, updated_at DESC LIMIT 200")
+        return page(request, "goals.html", goals=rows, events={g["id"]: drok.goals.events(g["id"], 3) for g in rows})
+
+    @web.get("/goals/{gid}", response_class=HTMLResponse)
+    async def goal_page(request: Request, gid: int):
+        g = drok.goals.get(gid)
+        if not g:
+            raise HTTPException(404)
+        turns = drok.db.all("SELECT id, status, steps, created_at, result FROM turns WHERE "
+                            "json_extract(meta, '$.goal_id') = ? ORDER BY id DESC LIMIT 30", gid)
+        return page(request, "goal.html", g=g, events=drok.goals.events(gid, 200), turns=turns)
+
+    @web.post("/goals")
+    async def create_goal(agent_id: str = Form(...), title: str = Form(...), objective: str = Form(...),
+                          done_when: str = Form(""), max_turns: int = Form(30), check_every_minutes: int = Form(0)):
+        try:
+            g = drok.goals.create(agent_id, title, objective, done_when, max_turns, check_every_minutes, "owner")
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        drok.touch_user()
+        return RedirectResponse(f"/goals/{g['id']}", status_code=303)
+
+    @web.post("/goals/{gid}/{action}")
+    async def goal_action(request: Request, gid: int, action: str, turns: int = Form(10)):
+        g = drok.goals.get(gid)
+        if not g:
+            raise HTTPException(404)
+        drok.touch_user()
+        if action == "pause":
+            drok.goals.set_status(gid, "paused", "paused by the owner")
+            if drok.db.one("SELECT id FROM turns WHERE status = 'running' AND json_extract(meta, '$.goal_id') = ?", gid):
+                drok.runtime.stop(g["agent_id"])
+        elif action == "resume":
+            drok.goals.set_status(gid, "active", "resumed by the owner")
+        elif action == "cancel":
+            drok.goals.set_status(gid, "cancelled", "cancelled by the owner")
+        elif action == "extend":
+            drok.goals.extend(gid, turns)
+        return back(request, f"/goals/{gid}")
+
+    # ---------------- self-built tools ----------------
+    @web.post("/tools/{name}/{action}")
+    async def custom_tool_action(request: Request, name: str, action: str):
+        if action == "delete":
+            drok.db.run("DELETE FROM custom_tools WHERE name = ?", name)
+        elif action == "toggle":
+            drok.db.run("UPDATE custom_tools SET enabled = 1 - enabled WHERE name = ?", name)
+        return back(request, "/settings#tools")
+
+    # ---------------- Google ----------------
+    @web.get("/integrations/google/connect")
+    async def google_connect(request: Request):
+        if not drok.google.configured:
+            return RedirectResponse("/settings?google_error=Set+GOOGLE_CLIENT_ID+and+GOOGLE_CLIENT_SECRET+first#google")
+        url, state, verifier = drok.google.auth_url()
+        request.session["google_oauth"] = {"state": state, "verifier": verifier}
+        return RedirectResponse(url)
+
+    async def _google_finish(request: Request, code: str, state: str) -> RedirectResponse:
+        pending = request.session.pop("google_oauth", None)
+        if not pending or (state and state != pending["state"]):
+            return RedirectResponse("/settings?google_error=That+link+expired+-+press+Connect+again#google",
+                                    status_code=303)
+        try:
+            await drok.google.exchange(code, pending["verifier"])
+        except Exception as e:
+            return RedirectResponse(f"/settings?google_error={quote(str(e)[:200])}#google", status_code=303)
+        drok.bus.publish({"type": "notice", "text": f"Google connected as {drok.google.email()}."})
+        return RedirectResponse("/settings#google", status_code=303)
+
+    @web.get("/oauth/google/callback")
+    async def google_callback(request: Request, code: str = "", state: str = "", error: str = ""):
+        if error:
+            return RedirectResponse(f"/settings?google_error={quote(error)}#google")
+        return await _google_finish(request, code, state)
+
+    @web.post("/integrations/google/paste")
+    async def google_paste(request: Request, redirect: str = Form(...)):
+        from ..tools.google import Google
+        code, state = Google.parse_redirect(redirect)
+        return await _google_finish(request, code, state)
+
+    @web.post("/integrations/google/disconnect")
+    async def google_disconnect(request: Request):
+        await drok.google.disconnect()
+        return RedirectResponse("/settings#google", status_code=303)
 
     # ---------------- live events ----------------
     @web.get("/events")

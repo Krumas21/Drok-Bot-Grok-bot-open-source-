@@ -134,6 +134,17 @@
   }
   bindApprovals(document);
 
+  // ---- answers to agent questions (option buttons) ----
+  document.addEventListener("submit", async e => {
+    const f = e.target.closest("form[data-answer]");
+    if (!f) return;
+    e.preventDefault();
+    const r = await fetch(f.action, { method: "POST", body: new URLSearchParams(new FormData(f)) });
+    if (!r.ok) { toast("Couldn't send: " + esc(await r.text())); return; }
+    f.closest(".question")?.querySelectorAll("button").forEach(b => b.disabled = true);
+    pull();
+  });
+
   // ---- live events ----
   const statusWords = { idle: "idle", working: "working", waiting: "waiting on you", error: "error" };
   function setStatus(agentId, status) {
@@ -184,6 +195,12 @@
         break;
       case "teach":
         if (page.page === "computer") location.reload();
+        break;
+      case "goal":
+        if (page.page === "goals" || page.page === "goal") location.reload();
+        break;
+      case "question":
+        if (ev.conversation_id !== convId) toast(`<b>${esc(ev.agent_id)}</b> asks: ${esc(ev.question)}`, 12000);
         break;
     }
   };

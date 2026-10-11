@@ -11,7 +11,8 @@
         <span data-agent="{{ agent.id }}" data-status="{{ agent.status }}" style="--c: {{ agent.color }}"><span class="glyph">{{ agent.name[0] }}</span></span>
         <div>
           <h1>{{ agent.name }}</h1>
-          <div class="convo-sub">{{ agent.title }} <span data-status-text="{{ agent.id }}">{{ {'idle':'idle','working':'working','waiting':'waiting on you','error':'error'}[agent.status] }}</span> · <span class="mono">{{ agent.model }}</span></div>
+          <div class="convo-sub">{{ agent.title }} <span data-status-text="{{ agent.id }}">{{ {'idle':'idle','working':'working','waiting':'waiting on you','error':'error'}[agent.status] }}</span> · <span class="mono">{{ agent.model }}</span>{% if agent.reasoning %} · thinks {{ agent.reasoning }}{% endif %}</div>
+          {% if goals %}<div class="goal-chips">{% for g in goals %}<a class="goal-chip {{ g.status }}" href="/goals/{{ g.id }}" title="{{ g.status }}">#{{ g.id }} {{ g.title[:40] }} · {{ g.turns_used }}/{{ g.max_turns }}</a>{% endfor %}</div>{% endif %}
         </div>
         <div class="convo-actions">
           <button class="btn small" type="button" onclick="document.getElementById('chat').classList.toggle('with-screen')">Screen</button>

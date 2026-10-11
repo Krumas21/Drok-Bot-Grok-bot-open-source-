@@ -4,19 +4,39 @@
 {% block main %}
 <div class="page">
   <div class="page-head">
-    <div><h1>Skills</h1><p>Procedures the whole team can follow - steps, decision rules, how to validate, and what needs your approval. Agents save new ones as they learn; you can teach one by demonstration on the Computer page.</p></div>
+    <div><h1>Skills</h1><p>The team's procedures - steps, decision rules, how to validate, pitfalls, what needs your approval. Agents write new ones after real work and patch them when they learn something; the curator archives agent-made skills nobody has used for 60 days. Invoke one in chat with <code>/skill-name</code>, or teach one by demonstration on the Computer page.</p></div>
     <a class="btn primary" href="/skills/new">Write a skill</a>
   </div>
   <table class="ledger">
-    <thead><tr><th>Skill</th><th>What it does</th><th></th></tr></thead>
+    <thead><tr><th>Skill</th><th>What it does</th><th>Made by</th><th style="text-align: right">Uses</th><th>Last used</th><th></th></tr></thead>
     <tbody>
     {% for s in skills %}
-      <tr><td class="mono"><a href="/skills/{{ s.slug }}">{{ s.slug }}</a> {% if s.draft %}<span class="tag pending">draft</span>{% endif %}</td>
-        <td>{{ s.description }}</td><td><a class="btn small" href="/skills/{{ s.slug }}">Open</a></td></tr>
+      {% set maker = agent_map.get(s.created_by) %}
+      <tr><td class="mono"><a href="/skills/{{ s.slug }}">{{ s.slug }}</a> {% if s.draft %}<span class="tag pending">draft</span>{% endif %}{% if s.pinned %} <span class="tag">pinned</span>{% endif %}
+            {% if s.files %}<div class="hint">{{ s.files | length }} file{{ 's' if s.files | length != 1 }}</div>{% endif %}</td>
+        <td>{{ s.description }}</td>
+        <td>{% if maker %}<span class="chip" style="--c: {{ maker.color }}"><i></i>{{ maker.name }}</span>{% else %}<span class="hint">{{ s.created_by }}</span>{% endif %}
+            {% if s.patches %}<div class="hint">improved {{ s.patches }}×</div>{% endif %}</td>
+        <td class="mono" style="text-align: right">{{ s.uses }}</td>
+        <td>{{ s.last_used | ago }}</td>
+        <td class="row" style="flex-wrap: nowrap">
+          <form method="post" action="/skills/{{ s.slug }}/{{ 'unpin' if s.pinned else 'pin' }}" class="inline"><button class="btn ghost small" title="Pinned skills are never archived">{{ 'Unpin' if s.pinned else 'Pin' }}</button></form>
+          <form method="post" action="/skills/{{ s.slug }}/archive" class="inline"><button class="btn ghost small">Archive</button></form>
+        </td></tr>
     {% else %}
-      <tr><td colspan="3" class="empty">No skills yet.</td></tr>
+      <tr><td colspan="6" class="empty">No skills yet.</td></tr>
     {% endfor %}
     </tbody>
   </table>
+
+  {% if archived %}
+  <div class="section" style="margin-top: 40px">
+    <div class="section-head"><h2>Archived</h2><p>Not shown to agents. Restore to bring one back.</p></div>
+    <table class="ledger"><tbody>
+      {% for s in archived %}<tr><td class="mono">{{ s.slug }}</td><td>{{ s.description }}</td><td class="hint">{{ s.created_by }}</td>
+        <td><form method="post" action="/skills/{{ s.slug }}/restore" class="inline"><button class="btn small">Restore</button></form></td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

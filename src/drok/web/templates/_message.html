@@ -5,10 +5,39 @@
   <div class="msg-time">{{ m.created_at | clock }}</div>
   <div class="msg-body">
   {%- if m.kind == 'tool' %}
-    <details class="toolline">
-      <summary><span class="tname">{{ m.meta.tool }}</span><span class="tsubj">{{ m.content }}</span><span class="tms">{{ (m.meta.ms / 1000) | round(1) }}s</span></summary>
+    <details class="toolline{% if m.meta.worker %} worker{% endif %}">
+      <summary>{% if m.meta.worker %}<span class="wtag">w{{ m.meta.worker }}</span>{% endif %}<span class="tname">{{ m.meta.tool }}</span><span class="tsubj">{{ m.content }}</span><span class="tms">{{ (m.meta.ms / 1000) | round(1) }}s</span></summary>
       <pre>{{ m.meta.preview }}</pre>
     </details>
+  {%- elif m.kind == 'plan' %}
+    {%- set items = m.meta['items'] or [] %}
+    {%- set done = items | selectattr('status', 'equalto', 'done') | list | length %}
+    <div class="plan">
+      <div class="plan-head"><strong>Plan</strong><span class="hint">{{ done }}/{{ items | length }} done</span></div>
+      <div class="meter"><i style="width: {{ (100 * done / (items | length or 1)) | round }}%"></i></div>
+      <ol>{% for p in items %}<li class="{{ p.status }}"><span class="box"></span>{{ p.text }}</li>{% endfor %}</ol>
+    </div>
+  {%- elif m.kind == 'thought' %}
+    <details class="thought"><summary>thinking</summary><div class="md" data-raw>{{ m.content }}</div></details>
+  {%- elif m.kind == 'question' %}
+    <div class="callout pending question">
+      <div class="callout-head"><span><strong>{{ name }}</strong> asks</span></div>
+      <div class="md" data-raw>{{ m.content }}</div>
+      {% if m.meta.why %}<div class="why">{{ m.meta.why }}</div>{% endif %}
+      {% if m.meta.options %}
+      <div class="row" style="margin-top: 10px">
+        {% for o in m.meta.options %}
+          <form method="post" action="/c/{{ m.conversation_id }}/send" data-answer class="inline"><input type="hidden" name="text" value="{{ o }}"><button class="btn small">{{ o }}</button></form>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  {%- elif m.kind == 'goal' %}
+    <div class="goalnote {{ m.meta.event }}"><a href="/goals/{{ m.meta.goal_id }}">Goal #{{ m.meta.goal_id }}</a>
+      <div class="md" data-raw>{{ m.content }}</div></div>
+  {%- elif m.kind == 'learned' %}
+    <div class="learned"><span class="learned-tag">learned</span> {{ m.content }}
+      {% if m.meta.suggestion %}<a class="hint" href="/agents/{{ m.author }}#instructions">review instructions</a>{% endif %}</div>
   {%- elif m.kind == 'approval' %}
     {%- set st = m.meta.status %}
     <div class="callout {{ st }}" data-approval-id="{{ m.meta.approval_id }}">
@@ -51,7 +80,7 @@
     <div class="md" data-raw>{{ m.content }}</div>
   {%- else %}
     <div class="msg-card">
-      <div class="msg-author">{{ name }}{% if m.meta.source == 'telegram' %} <span class="hint">via Telegram</span>{% endif %}{% if m.meta.routine_id %} <span class="hint">routine</span>{% endif %}</div>
+      <div class="msg-author">{{ name }}{% if m.meta.source == 'telegram' %} <span class="hint">via Telegram</span>{% endif %}{% if m.meta.routine_id %} <span class="hint">routine</span>{% endif %}{% if m.meta.goal_id %} <a class="hint" href="/goals/{{ m.meta.goal_id }}">goal #{{ m.meta.goal_id }}</a>{% endif %}</div>
       <div class="md" data-raw>{{ m.content }}</div>
     </div>
   {%- endif %}

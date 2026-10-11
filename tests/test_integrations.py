@@ -58,3 +58,21 @@ async def test_telegram_routing(app):
     assert texts[1] == "Forge: asked via /ask"
     assert "web reply" not in texts and "web only" not in texts and "owner text" not in texts
     assert "git push" in texts[2] and sent[2][1] is not None  # approval comes with buttons
+
+    q = post(forge_dm, "forge", "Which city?", kind="question", meta={"options": ["Vilnius", "Kaunas"]})
+    await tg.on_event({"type": "message", "message": q})
+    assert "Forge asks" in sent[-1][0] and sent[-1][1].inline_keyboard[1][0].callback_data == f"qa:{q['id']}:1"
+
+    class Query:
+        data, from_user = f"qa:{q['id']}:1", type("U", (), {"id": 42})()
+        answered = ""
+
+        async def answer(self, text=""):
+            Query.answered = text
+
+        async def edit_message_reply_markup(self, reply_markup=None):
+            pass
+
+    await tg.on_callback(type("Upd", (), {"callback_query": Query()})(), None)
+    last = app.db.one("SELECT * FROM messages WHERE conversation_id = ? ORDER BY id DESC LIMIT 1", forge_dm)
+    assert last["author"] == "user" and last["content"] == "Kaunas" and Query.answered.startswith("Answered")

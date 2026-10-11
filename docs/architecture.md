@@ -17,10 +17,17 @@ Drok is two containers and one SQLite file.
 src/drok/
   app.py          wiring, agents, conversations, tool registry
   runtime.py      the durable turn loop (read this first)
+  context.py      system prompt + operating protocol, history, goal briefs, structured compression
+  memory.py       curated memory, recall (FTS over all messages), post-turn reflection
+  goals.py        long-horizon goals, continuation engine, verifier, wake-ups
+  delegate.py     parallel isolated workers
+  skills.py       progressive-disclosure skill library, usage tracking, curator
   review.py       rules + reviewer model -> allow / ask / deny
-  llm.py          provider registry, retries, fallbacks (OpenAI-compatible endpoints)
-  scheduler.py    routines: cron, webhooks, run history, absence auto-pause
-  tools/          system.py (shell, files, web), computer.py (browser, computer), team.py (memory, handoffs, skills, routines, secrets, takeover, notify)
+  llm.py          provider registry, retries, fallbacks, reasoning effort (OpenAI-compatible endpoints)
+  scheduler.py    routines (cron, webhooks), goal/wake-up ticks, curator, absence auto-pause
+  tools/          mind (think, plan, memory, recall, goals, clarify), system (shell, files, documents),
+                  web (search, extract), computer (browser, pixels), team (handoffs, delegate, skills, routines,
+                  secrets, notify), custom (self-built tools), google (Gmail, Drive, Calendar)
   mcp_client.py   long-lived MCP sessions -> tools
   teach.py        record a browser demo -> draft skill
   vault.py        Fernet-encrypted secrets, placeholder fill + redaction

@@ -12,11 +12,56 @@
         <tr><td>LLM providers</td><td>{% for p in providers %}<span class="tag on">{{ p }}</span> {% else %}<span class="tag off">none</span> <span class="hint">Add OPENAI_API_KEY, ANTHROPIC_API_KEY, OPENROUTER_API_KEY, OLLAMA_BASE_URL… to .env</span>{% endfor %}</td></tr>
         <tr><td>Default model</td><td class="mono">{{ st.default_model }}</td></tr>
         <tr><td>Auto-review</td><td>{% if st.auto_review %}<span class="tag on">on</span> <span class="mono hint">{{ st.reviewer_model or "each agent's own model" }}</span>{% else %}<span class="tag off">off</span> <span class="hint">risky calls not covered by a rule run without review</span>{% endif %}</td></tr>
+        <tr><td>Self-improvement</td><td>{% if st.learning %}<span class="tag on">on</span> <span class="hint">agents reflect after substantial work and save memory and skills</span>{% else %}<span class="tag off">off</span>{% endif %}</td></tr>
+        <tr><td>Background model</td><td class="mono">{{ st.aux_model or st.reviewer_model or "each agent's own model" }} <span class="hint">summaries, compression, reflection, goal verification</span></td></tr>
         <tr><td>Telegram</td><td>{% if telegram %}<span class="tag on">connected</span> <span class="hint">allowed users: {{ st.telegram_allowed | join(', ') or 'none yet - message the bot to get your id' }}</span>{% else %}<span class="tag off">off</span> <span class="hint">set TELEGRAM_BOT_TOKEN</span>{% endif %}</td></tr>
         <tr><td>Computer</td><td><span class="tag {{ 'on' if computer.ok else 'off' }}">{{ 'healthy' if computer.ok else 'unreachable' }}</span> <span class="hint">{{ st.screens }} screens</span></td></tr>
         <tr><td>Web search</td><td>{% if st.brave_api_key %}Brave{% elif st.searxng_url %}SearXNG{% else %}<span class="hint">off - agents use the browser. Set BRAVE_API_KEY or SEARXNG_URL.</span>{% endif %}</td></tr>
         <tr><td>Voice</td><td><span class="hint">speech-to-text: {{ st.stt_model or 'off' }} · text-to-speech: {{ st.tts_model or 'off' }}</span></td></tr>
         <tr><td>Routine auto-pause</td><td>after {{ st.absence_days }} days without hearing from you</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section" id="google">
+    <div class="section-head"><h2>Google - Gmail, Drive, Calendar</h2><p>Agents read and organize mail, draft (sending needs your OK), read and upload Drive files, list and create events.</p></div>
+    {% if google_error %}<div class="callout" style="border-color: var(--bad); margin-bottom: 12px"><span style="color: var(--bad)">{{ google_error }}</span></div>{% endif %}
+    {% if google_email %}
+      <div class="row"><span class="tag on">connected</span> <strong>{{ google_email }}</strong>
+        <form method="post" action="/integrations/google/disconnect" class="inline" onsubmit="return confirm('Disconnect Google and revoke Drok\'s access?')"><button class="btn ghost small danger">Disconnect</button></form></div>
+    {% elif not google_configured %}
+      <div class="panel" style="max-width: 760px">
+        <ol style="margin: 0; padding-left: 1.2em; line-height: 1.8">
+          <li>In <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a>: create a project, enable the <b>Gmail</b>, <b>Google Drive</b> and <b>Google Calendar</b> APIs.</li>
+          <li>OAuth consent screen: External, add yourself as a test user (or publish the app so tokens don't expire after 7 days).</li>
+          <li>Credentials → Create OAuth client ID → type <b>Desktop app</b>.</li>
+          <li>Put <code>GOOGLE_CLIENT_ID</code> and <code>GOOGLE_CLIENT_SECRET</code> in <code>.env</code>, restart, and come back here.</li>
+        </ol>
+      </div>
+    {% else %}
+      <div class="panel" style="max-width: 760px">
+        <p style="margin-top: 0">1. <a class="btn primary small" href="/integrations/google/connect" target="_blank" rel="noopener">Connect Google</a> - approve access in the new tab.</p>
+        <p>2. Google then sends your browser to <code>{{ google_redirect }}</code>. If you're on the server itself, that finishes automatically. Otherwise the page won't load - <b>copy its full address</b> and paste it here:</p>
+        <form method="post" action="/integrations/google/paste" class="row" style="flex-wrap: nowrap">
+          <input name="redirect" class="code" placeholder="http://localhost:…/oauth/google/callback?state=…&code=…" required>
+          <button class="btn small">Finish connecting</button>
+        </form>
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="section" id="tools">
+    <div class="section-head"><h2>Tools built by agents</h2><p>Scripts on the computer that agents registered as tools for the whole team. Every call is safety-reviewed.</p></div>
+    <table class="ledger">
+      <thead><tr><th>Tool</th><th>What it does</th><th>Command</th><th>By</th><th style="text-align: right">Uses</th><th></th></tr></thead>
+      <tbody>
+      {% for t in custom_tools %}
+        <tr><td class="mono">{{ t.name }} {% if not t.enabled %}<span class="tag off">off</span>{% endif %}</td><td>{{ t.description }}</td>
+          <td class="mono" style="max-width: 280px; word-break: break-all">{{ t.command }}</td><td>{{ t.created_by }}</td>
+          <td class="mono" style="text-align: right">{{ t.uses }}</td>
+          <td class="row" style="flex-wrap: nowrap"><form method="post" action="/tools/{{ t.name }}/toggle" class="inline"><button class="btn ghost small">{{ 'Disable' if t.enabled else 'Enable' }}</button></form>
+            <form method="post" action="/tools/{{ t.name }}/delete" class="inline" onsubmit="return confirm('Delete this tool?')"><button class="btn ghost small danger">Delete</button></form></td></tr>
+      {% else %}<tr><td colspan="6" class="hint">None yet. When an agent keeps repeating a multi-step operation it can build a tool for it (you approve the creation).</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

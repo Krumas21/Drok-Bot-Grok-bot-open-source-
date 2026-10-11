@@ -19,7 +19,7 @@
         <div class="field"><label>Title</label><input name="title" value="{{ a.title }}"></div>
       </div>
       <div class="field"><label>Description</label><input name="description" value="{{ a.description }}"></div>
-      <div class="field"><label>Role instructions</label><textarea name="system_prompt" rows="10">{{ a.system_prompt }}</textarea></div>
+      <div class="field" id="instructions"><label>Role instructions</label><textarea name="system_prompt" rows="10">{{ a.system_prompt }}</textarea></div>
       <div class="grid2">
         <div class="field"><label>Model</label><input name="model" class="code" value="{{ a.model }}"><div class="hint">configured: {{ providers.keys() | join(', ') or 'none' }}</div></div>
         <div class="field"><label>Fallbacks</label><input name="fallbacks" class="code" value="{{ a.fallbacks | join(', ') }}"></div>
@@ -29,6 +29,8 @@
           <details class="hint"><summary>available tools</summary>{{ tool_names | join(', ') }}</details></div>
         <div class="field"><label>Screen</label><input name="screen" type="number" min="1" value="{{ a.screen }}"></div>
       </div>
+      <div class="field"><label>Reasoning effort <span class="hint">for models that support it (o-series, GPT-5, Grok, Gemini…); ignored otherwise</span></label>
+        <select name="reasoning">{% for v, l in [('', 'model default'), ('low', 'low'), ('medium', 'medium'), ('high', 'high')] %}<option value="{{ v }}" {% if a.reasoning == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
       <div class="field"><label style="display: flex; gap: 8px; font-weight: 500"><input type="checkbox" name="is_orchestrator" value="1" style="width: auto" {% if a.is_orchestrator %}checked{% endif %}> Team lead (talks to you on Telegram)</label></div>
       <div class="row">
         <button class="btn primary">Save</button>
@@ -37,20 +39,36 @@
 
     <div>
       <div class="section">
-        <div class="section-head"><h2>Memory</h2><p>Private to {{ a.name }} unless marked shared.</p></div>
-        <form method="post" action="/agents/{{ a.id }}/memory" class="row" style="margin-bottom: 12px; flex-wrap: nowrap">
+        <div class="section-head"><h2>Memory</h2><p>Always in {{ a.name }}'s prompt. Bounded on purpose - agents consolidate instead of hoarding.</p></div>
+        {% if error %}<div class="callout" style="margin-bottom: 12px; border-color: var(--bad)"><div class="hint" style="color: var(--bad); white-space: pre-wrap">{{ error }}</div></div>{% endif %}
+        {% for label, rows, usage in [(a.name ~ "'s notes", own, own_usage), ('Shared - you & the team', shared, shared_usage)] %}
+          {% set pct = (100 * usage[0] / usage[1]) | round %}
+          <div class="row" style="justify-content: space-between; margin-top: 14px"><strong style="font-size: 0.9rem">{{ label }}</strong><span class="hint">{{ usage[0] }}/{{ usage[1] }} chars</span></div>
+          <div class="meter {{ 'full' if pct > 95 else 'warn' if pct > 80 else '' }}"><i style="width: {{ pct }}%"></i></div>
+          {% for m in rows %}
+            <div class="row" style="justify-content: space-between; flex-wrap: nowrap; padding: 5px 0; border-bottom: 1px solid var(--rule); font-size: 0.9rem">
+              <span>{{ m.content }}</span>
+              <form method="post" action="/memories/{{ m.id }}/delete" class="inline"><button class="btn ghost small" aria-label="Forget">Forget</button></form>
+            </div>
+          {% else %}<p class="hint">Empty.</p>{% endfor %}
+        {% endfor %}
+        <form method="post" action="/agents/{{ a.id }}/memory" class="row" style="margin-top: 12px; flex-wrap: nowrap">
           <input name="content" placeholder="Something {{ a.name }} should always know" required>
           <label style="display: flex; gap: 6px; margin: 0; font-weight: 500; white-space: nowrap"><input type="checkbox" name="shared" value="1" style="width: auto"> shared</label>
           <button class="btn small">Add</button>
         </form>
-        {% for m in memories %}
-          <div class="row" style="justify-content: space-between; flex-wrap: nowrap; padding: 6px 0; border-bottom: 1px solid var(--rule)">
-            <span>{{ m.content }} {% if m.agent_id is none %}<span class="tag">shared</span>{% endif %}</span>
-            <form method="post" action="/memories/{{ m.id }}/delete" class="inline"><button class="btn ghost small" aria-label="Forget">Forget</button></form>
-          </div>
-        {% else %}
-          <p class="hint">Nothing yet. {{ a.name }} saves preferences, decisions and lessons here as it works.</p>
-        {% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>Recently learned</h2><p>From its own reflection after substantial work</p></div>
+        {% for l in learned %}<div class="learned" style="padding: 4px 0"><span class="hint">{{ l.created_at | ago }}</span> {{ l.content }}</div>
+        {% else %}<p class="hint">Nothing yet. After bigger tasks {{ a.name }} reviews what happened and keeps what's worth keeping.</p>{% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>Goals</h2><a href="/goals" class="hint">All goals</a></div>
+        {% for g in goals %}<div style="padding: 3px 0"><a href="/goals/{{ g.id }}">#{{ g.id }} {{ g.title }}</a> <span class="tag">{{ g.status }}</span> <span class="hint">{{ g.turns_used }}/{{ g.max_turns }} turns</span></div>
+        {% else %}<p class="hint">None.</p>{% endfor %}
       </div>
 
       <div class="section">

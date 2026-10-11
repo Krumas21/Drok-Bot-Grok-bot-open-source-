@@ -46,14 +46,57 @@ async def completions(request: Request):
     system = text_of(msgs[0]) if msgs and msgs[0]["role"] == "system" else ""
     if "safety reviewer" in system:
         return reply('{"decision": "allow", "reason": "mock reviewer"}')
-    if "running summary" in system or "recorded browser demonstration" in system:
+    if "self-improvement reviewer" in system:
+        return reply('{"memory": [], "skill": null, "instructions": null}')
+    if "verify whether" in system:
+        return reply('{"verdict": "done", "reason": "mock verifier saw the evidence"}')
+    if "running summary" in system or "recorded browser demonstration" in system or "checkpoint" in system:
         return reply("DESCRIPTION: mock skill\n\n## Steps\n1. mock")
     last = msgs[-1]
     if last["role"] == "tool" or text_of(last).startswith("[screen image"):
         result = next(text_of(m) for m in reversed(msgs) if m["role"] == "tool")
+        caller = next(m for m in reversed(msgs) if m["role"] == "assistant" and m.get("tool_calls"))
+        call = caller["tool_calls"][0]["function"]
+        if call["name"] == "write_file" and "e2e-goal" in call["arguments"]:
+            return reply("", "goal_update", {"status": "done", "progress": "wrote the file",
+                                             "evidence": "/workspace/e2e-goal.txt now exists"})
+        if call["name"] == "shell" and "background process #" in result:
+            pid = result.split("background process #", 1)[1].split()[0]
+            return reply("", "process", {"action": "log", "id": pid})
+        if call["name"] == "process" and "bg-done" not in result:  # still running: poll again
+            return reply("", "process", json.loads(call["arguments"]))
         return reply(f"Done. Tool said:\n```\n{result[:600]}\n```")
     said = text_of(last)
-    cmd = said.split("]: ", 1)[-1].strip()
+    cmd = said.split("]: ", 1)[-1].strip().removeprefix("TASK:").strip().splitlines()[0] if said.strip() else ""
+    if said.startswith("[Goal #"):
+        return reply("Working on the goal.", "write_file", {"path": "/workspace/e2e-goal.txt", "content": "goal done"})
+    if cmd.startswith("e2e goal"):
+        return reply("", "goal_set", {"title": "E2E goal", "objective": "Write /workspace/e2e-goal.txt",
+                                      "done_when": "/workspace/e2e-goal.txt exists", "max_turns": 3})
+    if cmd.startswith("e2e plan"):
+        return reply("", "plan", {"items": [{"text": "first step", "status": "done"}, {"text": "second step"}]})
+    if cmd.startswith("e2e delegate"):
+        return reply("", "delegate", {"tasks": [{"task": "e2e shell: echo worker-one"},
+                                                {"task": "e2e shell: echo worker-two"}]})
+    if cmd.startswith("e2e extract:"):
+        return reply("", "web_extract", {"urls": [cmd.split(":", 1)[1].strip()]})
+    if cmd.startswith("e2e makefile"):
+        return reply("", "make_file", {"path": "/workspace/e2e/report.pdf", "title": "E2E report",
+                                       "content": "# Report\n\nHello **PDF**\n\n| a | b |\n|---|---|\n| 1 | 2 |"})
+    if cmd.startswith("e2e sheet"):
+        return reply("", "make_file", {"path": "/workspace/e2e/data.xlsx", "content": "name,qty\napples,3\npears,5"})
+    if cmd.startswith("e2e clarify"):
+        return reply("", "clarify", {"question": "Which colour?", "options": ["Red", "Blue"]})
+    if cmd.startswith("e2e memory"):
+        return reply("", "memory", {"action": "add", "target": "shared", "content": "Owner's favourite colour is orange."})
+    if cmd.startswith("e2e recall"):
+        return reply("", "recall", {"query": "favourite colour"})
+    if cmd.startswith("e2e tool"):
+        return reply("", "tool_create", {"name": "e2e_echo", "description": "Echo the arguments back.",
+                                         "command": "cat", "parameters": {"msg": "text to echo"},
+                                         "test_args": {"msg": "hi"}})
+    if cmd.startswith("e2e bg"):
+        return reply("", "shell", {"command": "sleep 1; echo bg-done", "background": True})
     if cmd.startswith("e2e shell:"):
         return reply("Running it.", "shell", {"command": cmd.split(":", 1)[1].strip()})
     if cmd.startswith("e2e browse:"):

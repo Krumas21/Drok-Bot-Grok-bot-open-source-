@@ -271,6 +271,43 @@ details > summary::-webkit-details-marker { display: none; }
 .screenpane { border-left: 1px solid var(--rule); background: var(--paper-2); display: flex; flex-direction: column; min-height: 0; }
 .screenpane-head { display: flex; justify-content: space-between; align-items: center; padding: var(--s3) var(--s4); font-size: 0.82rem; color: var(--ink-2); gap: var(--s2); }
 
+.toolline .wtag { font: 700 0.66rem var(--body); color: var(--paper); background: var(--ink-3); border-radius: 3px; padding: 0 5px; flex-shrink: 0; }
+
+/* ---------- harness: plans, thinking, questions, goals, learning ---------- */
+.plan { border: 1px solid var(--rule); border-radius: var(--radius); padding: var(--s3) var(--s4); background: var(--paper); max-width: 560px; }
+.plan-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 0.85rem; }
+.plan-head strong { font-family: var(--display); }
+.plan ol { list-style: none; margin: var(--s2) 0 0; padding: 0; font-size: 0.88rem; }
+.plan li { display: flex; gap: var(--s2); align-items: baseline; padding: 2px 0; }
+.plan .box { width: 11px; height: 11px; border: 1.5px solid var(--ink-3); border-radius: 3px; flex-shrink: 0; transform: translateY(1px); }
+.plan li.done { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--rule); }
+.plan li.done .box { background: var(--ok); border-color: var(--ok); }
+.plan li.in_progress .box { border-color: var(--c, var(--signal)); background: linear-gradient(90deg, var(--c, var(--signal)) 50%, transparent 50%); }
+.plan li.in_progress { font-weight: 600; }
+.plan li.blocked .box { border-color: var(--bad); background: var(--bad-wash); }
+.meter { height: 4px; background: var(--paper-3); border-radius: 2px; overflow: hidden; margin-top: 6px; }
+.meter i { display: block; height: 100%; background: var(--c, var(--signal)); transition: width 0.5s var(--ease); }
+.meter.warn i { background: var(--warn); } .meter.full i { background: var(--bad); }
+.thought summary { font: italic 0.8rem var(--body); color: var(--ink-3); padding: 2px 0; }
+.thought summary::before { content: "◇ "; color: var(--c, var(--ink-3)); font-style: normal; }
+.thought .md { color: var(--ink-2); font-size: 0.86rem; border-left: 2px solid var(--rule); padding-left: var(--s3); margin: 4px 0 6px; }
+.goalnote { font-size: 0.86rem; border: 1px dashed var(--rule); border-radius: var(--radius); padding: var(--s2) var(--s3); }
+.goalnote > a { font: 700 0.78rem var(--display); color: var(--c, var(--signal-ink)); text-decoration: none; }
+.goalnote.done { border-style: solid; border-color: var(--ok); }
+.goalnote.rejected { border-color: var(--warn); }
+.learned { font-size: 0.8rem; color: var(--ink-2); }
+.learned-tag { font: 700 0.64rem var(--body); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ok); margin-right: 4px; }
+.goal-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.goal-chip { font-size: 0.72rem; text-decoration: none; padding: 1px 8px; border-radius: 10px; background: var(--signal-wash); color: var(--signal-ink); }
+.goal-chip.blocked { background: var(--bad-wash); color: var(--bad); }
+.goal-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--s3); padding: var(--s4) 0; border-bottom: 1px solid var(--rule); }
+.goal-card h3 a { text-decoration: none; }
+.goal-card .meta { font-size: 0.8rem; color: var(--ink-3); }
+.state-block { white-space: pre-wrap; background: var(--paper-2); border-radius: var(--radius); padding: var(--s3); font-size: 0.88rem; }
+.events { list-style: none; padding: 0; margin: 0; font-size: 0.85rem; }
+.events li { padding: 6px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 90px 80px 1fr; gap: var(--s2); }
+.events .k { font: 600 0.7rem var(--body); text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-3); }
+
 /* ---------- monitors ---------- */
 .wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: var(--s5); }
 .monitor { display: flex; flex-direction: column; gap: var(--s2); }

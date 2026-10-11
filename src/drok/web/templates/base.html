@@ -43,6 +43,7 @@
 
     <div class="rail-label">Workshop</div>
     <a class="navlink" href="/approvals" {% if path == '/approvals' %}aria-current="page"{% endif %}>Approvals <span class="badge" data-pending data-count="{{ pending }}">{{ pending }}</span></a>
+    <a class="navlink" href="/goals" {% if path.startswith('/goals') %}aria-current="page"{% endif %}>Goals {% if open_goals %}<span class="hint">{{ open_goals }} open</span>{% endif %}</a>
     <a class="navlink" href="/computer" {% if path == '/computer' %}aria-current="page"{% endif %}>Computer</a>
     <a class="navlink" href="/routines" {% if path == '/routines' %}aria-current="page"{% endif %}>Routines</a>
     <a class="navlink" href="/skills" {% if path.startswith('/skills') %}aria-current="page"{% endif %}>Skills</a>

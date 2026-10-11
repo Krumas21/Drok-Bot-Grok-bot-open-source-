@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Goal #{{ g.id }}{% endblock %}
+{% block page %}goal{% endblock %}
+{% block main %}
+{% set a = agent_map.get(g.agent_id) %}
+<div class="page" style="--c: {{ a.color if a else 'var(--signal)' }}">
+  <div class="page-head">
+    <div>
+      <a href="/goals" class="hint">← Goals</a>
+      <h1>#{{ g.id }} {{ g.title }}</h1>
+      <p><span class="tag {{ {'active':'running','blocked':'pending','done':'done','failed':'failed','cancelled':'off','paused':'off'}[g.status] }}">{{ g.status }}</span>
+        {{ a.name if a else g.agent_id }} · turn {{ g.turns_used }} of {{ g.max_turns }}{% if g.check_every %} · checks every {{ (g.check_every / 60) | int }} min{% endif %} · started {{ g.created_at | ago }}</p>
+    </div>
+    <div class="row">
+      {% if g.status == 'active' %}<form method="post" action="/goals/{{ g.id }}/pause" class="inline"><button class="btn small">Pause</button></form>{% endif %}
+      {% if g.status in ('paused', 'blocked') %}<form method="post" action="/goals/{{ g.id }}/resume" class="inline"><button class="btn primary small">Resume</button></form>{% endif %}
+      {% if g.status not in ('done', 'cancelled') %}
+        <form method="post" action="/goals/{{ g.id }}/extend" class="row" style="gap: 6px; flex-wrap: nowrap"><input name="turns" type="number" value="10" min="1" style="width: 70px"><button class="btn small">Add turns</button></form>
+        <form method="post" action="/goals/{{ g.id }}/cancel" class="inline" onsubmit="return confirm('Cancel this goal?')"><button class="btn ghost small danger">Cancel</button></form>
+      {% endif %}
+      {% if a %}<a class="btn small" href="/c/{{ dm_ids[a.id] }}">Open chat</a>{% endif %}
+    </div>
+  </div>
+
+  <div class="grid2" style="align-items: start">
+    <div>
+      <div class="section"><div class="section-head"><h2>Objective</h2></div><div class="md state-block" data-raw>{{ g.objective }}</div></div>
+      <div class="section"><div class="section-head"><h2>Done when</h2></div><div class="md state-block" data-raw>{{ g.done_when or '_Not defined yet - the agent will propose one._' }}</div></div>
+      {% if g.plan %}
+      {% set done = g.plan | selectattr('status', 'equalto', 'done') | list | length %}
+      <div class="section">
+        <div class="plan" style="max-width: none">
+          <div class="plan-head"><strong>Plan</strong><span class="hint">{{ done }}/{{ g.plan | length }} done</span></div>
+          <div class="meter"><i style="width: {{ (100 * done / (g.plan | length)) | round }}%"></i></div>
+          <ol>{% for p in g.plan %}<li class="{{ p.status }}"><span class="box"></span>{{ p.text }}</li>{% endfor %}</ol>
+        </div>
+      </div>
+      {% endif %}
+      {% for key, label in [('progress', 'Progress'), ('next_steps', 'Next steps'), ('decisions', 'Decisions'), ('files', 'Files & links'), ('blocker', 'Blocked on')] %}
+        {% if g.state.get(key) %}<div class="section"><div class="section-head"><h2>{{ label }}</h2></div><div class="md state-block" data-raw>{{ g.state[key] }}</div></div>{% endif %}
+      {% endfor %}
+    </div>
+    <div>
+      <div class="section">
+        <div class="section-head"><h2>Timeline</h2><p>progress, verifier verdicts, status changes</p></div>
+        <ul class="events">
+          {% for e in events | reverse %}<li><span class="hint">{{ e.created_at | ago }}</span><span class="k">{{ e.kind }}</span><span>{{ e.text }}</span></li>{% endfor %}
+        </ul>
+      </div>
+      <div class="section">
+        <div class="section-head"><h2>Turns</h2></div>
+        <table class="ledger"><thead><tr><th>Turn</th><th>When</th><th>Steps</th><th>Status</th></tr></thead><tbody>
+          {% for t in turns %}<tr><td class="mono">{{ t.id }}</td><td>{{ t.created_at | ago }}</td><td class="mono">{{ t.steps }}</td><td><span class="tag {{ t.status }}">{{ t.status }}</span></td></tr>
+          {% else %}<tr><td colspan="4" class="hint">No turns yet.</td></tr>{% endfor %}
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

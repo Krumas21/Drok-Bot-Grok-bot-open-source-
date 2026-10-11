@@ -15,6 +15,9 @@ Drok gives language models a shell, a browser and your accounts. Read this befor
 | **Human takeover** | Logins, 2FA, CAPTCHAs and payments are handed to you on the live screen instead of being worked around. | Once you log a site in, agents on that screen can use the session. |
 | **Owner-only access** | Web UI behind a password (session cookie, SameSite=Lax, slow failed logins). VNC bridged through the same session. Telegram restricted to an allowlist of user ids. Webhooks need a per-routine secret. | Single admin. Use a strong password and keep the UI off the public internet. |
 | **Audit** | Every tool call, decision, reason, duration and result preview is logged (Activity page). | Logs live in the same database; they aren't tamper-proof. |
+| **Self-improvement limits** | Memory refuses entries that look like instructions or credentials (memory is injected into every prompt). Creating or changing a self-built tool and rewriting an agent's own instructions need your approval by default; every call of a self-built tool is reviewed. Workers spawned by `delegate` can't request approvals, touch memory/skills, schedule work or message you. | A skill an agent writes is only as good as the agent - review new skills on the Skills page now and then. |
+| **Google** | OAuth with PKCE; tokens encrypted in the vault, never shown to agents, revocable with one click. `gmail_send` and `calendar_create_event` always ask; drafts are allowed (nothing leaves your account). | Agents read your mail and files; email content is fenced as untrusted, but a malicious email is the classic prompt-injection vector. Keep send/publish behind approval. |
+| **Goal verification** | A separate model call checks completion evidence; cited files are read only from inside `/workspace`. | Verification is a judgment, not a proof. |
 | **Absence pause** | Routines pause after `DROK_ABSENCE_DAYS` without hearing from you. | - |
 
 ## Recommendations

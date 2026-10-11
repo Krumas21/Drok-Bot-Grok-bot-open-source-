@@ -22,6 +22,8 @@ log = logging.getLogger("drok.telegram")
 HELP = """Talk to me normally - I'm your orchestrator and I'll hand work to the team.
 /agents - who's on the team and what they're doing
 /ask <agent> <message> - talk to one agent directly
+/goal <objective> - give the team a long-horizon goal
+/goals - open goals and their progress
 /approvals - pending approvals
 /routines - scheduled work
 /stop [agent] - stop current work"""
@@ -48,6 +50,8 @@ class Telegram:
         h(CommandHandler("agents", self.cmd_agents))
         h(CommandHandler("ask", self.cmd_ask))
         h(CommandHandler("approvals", self.cmd_approvals))
+        h(CommandHandler("goal", self.cmd_goal))
+        h(CommandHandler("goals", self.cmd_goals))
         h(CommandHandler("routines", self.cmd_routines))
         h(CommandHandler("stop", self.cmd_stop))
         h(CallbackQueryHandler(self.on_callback))
@@ -127,7 +131,14 @@ class Telegram:
             path = "/settings#secrets" if msg["meta"].get("request") == "secret" else "/computer"
             await self.send(f"{author['name']} needs you to {what}:\n{msg['content']}\n\n{self._link(path)}")
             return
-        if msg["kind"] not in ("text", "status"):
+        if msg["kind"] == "question":
+            opts = msg["meta"].get("options") or []
+            markup = InlineKeyboardMarkup([[InlineKeyboardButton(o[:60], callback_data=f"qa:{msg['id']}:{n}")]
+                                           for n, o in enumerate(opts)]) if opts else None
+            await self.send(f"{author['name']} asks:\n{msg['content']}" + ("" if opts else "\n\n(Reply here.)"),
+                            buttons=markup)
+            return
+        if msg["kind"] not in ("text", "status") or msg["meta"].get("telegram_sent"):
             return
         if not ((in_orch_dm and source != "web") or source == "telegram"):
             return
@@ -205,6 +216,17 @@ class Telegram:
         if not self.is_allowed(q.from_user.id):
             await q.answer("Not allowed")
             return
+        if q.data.startswith("qa:"):
+            _, mid, idx = q.data.split(":")
+            asked = self.app.db.one("SELECT * FROM messages WHERE id = ?", int(mid))
+            opts = (asked or {}).get("meta", {}).get("options") or []
+            if not asked or int(idx) >= len(opts):
+                await q.answer("That question is gone")
+                return
+            self.app.runtime.user_message(asked["conversation_id"], opts[int(idx)], source="telegram")
+            await q.edit_message_reply_markup(reply_markup=None)
+            await q.answer(f"Answered: {opts[int(idx)][:40]}")
+            return
         _, aid, choice = q.data.split(":")
         ap = self.app.runtime.resolve_approval(int(aid), choice != "deny", always=choice == "always")
         await q.answer(f"{ap['status'] if ap else 'gone'}")
@@ -255,6 +277,27 @@ class Telegram:
             f"#{r['id']} {r['name']} ({r['agent_id']}) {r['cron'] or 'webhook'} - "
             f"{'next ' + sch.fmt(r['next_run_at'], r['tz']) if r['enabled'] else 'paused'}" for r in rows
         ) or "No routines.")
+
+    async def cmd_goal(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+        if not await self._guard(update):
+            return
+        text = " ".join(ctx.args).strip()
+        orch = self.app.orchestrator()
+        if not text or not orch:
+            await update.message.reply_text("Usage: /goal <what you want achieved, and how you'll know it's done>")
+            return
+        self.app.touch_user()
+        g = self.app.goals.create(orch["id"], text[:80], text, "", created_by="owner")
+        await update.message.reply_text(f"Goal #{g['id']} started with {orch['name']}. I'll report progress, "
+                                        f"questions and the verified result here.\n{self._link('/goals/' + str(g['id']))}")
+
+    async def cmd_goals(self, update: Update, _) -> None:
+        if not await self._guard(update):
+            return
+        rows = self.app.db.all("SELECT * FROM goals WHERE status IN ('active','blocked','paused') ORDER BY id")
+        await update.message.reply_text("\n".join(
+            f"#{g['id']} [{g['status']}] {g['title']} - {g['agent_id']}, turn {g['turns_used']}/{g['max_turns']}\n"
+            f"   {(g['state'].get('progress') or '-')[:160]}" for g in rows) or "No open goals.")
 
     async def cmd_stop(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._guard(update):

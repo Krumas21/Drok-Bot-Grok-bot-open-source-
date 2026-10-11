@@ -81,6 +81,57 @@ check(httpx.post(BASE + url.split("?")[0], content="deploy").status_code == 404,
 check(httpx.post(BASE + url, content="deploy done").json()["fired"] is True, "webhook fires on match")
 check(wait_for(forge, r"Tool said:.*hook-ok"), "webhook-triggered run executes")
 
-for path in ("/computer", "/approvals", "/routines", "/skills", "/settings", "/activity", "/files", "/agents"):
+# ---------- harness ----------
+c.post(f"/c/{forge}/send", data={"text": "e2e plan"})
+check(wait_for(forge, r'class="plan".*1/2 done'), "plan renders as a live checklist")
+
+c.post(f"/c/{scout}/send", data={"text": "e2e delegate"})
+check(wait_for(scout, r"Worker 1.*worker-one.*Worker 2.*worker-two", 90), "delegate runs two isolated workers in parallel")
+
+c.post(f"/c/{forge}/send", data={"text": "e2e makefile"})
+check(wait_for(forge, r"Created /workspace/e2e/report.pdf", 90), "make_file renders markdown to PDF")
+check(c.get("/files/e2e/report.pdf", params={"raw": 1}).content[:4] == b"%PDF", "the PDF is a real PDF")
+c.post(f"/c/{forge}/send", data={"text": "e2e sheet"})
+check(wait_for(forge, r"Created /workspace/e2e/data.xlsx"), "make_file builds a spreadsheet")
+
+c.post(f"/c/{scout}/send", data={"text": "e2e extract: https://example.com"})
+check(wait_for(scout, r"Example Domain", 60), "web_extract scrapes a page into markdown")
+
+c.post(f"/c/{chief}/send", data={"text": "e2e memory - note that my favourite colour is orange"})
+check(wait_for(chief, r"Remembered"), "memory add")
+c.post(f"/c/{scout}/send", data={"text": "e2e recall"})
+check(wait_for(scout, r"is orange"), "recall finds it in another agent's conversation")
+
+c.post(f"/c/{chief}/send", data={"text": "e2e clarify"})
+check(wait_for(chief, r'data-answer.*Blue'), "clarify asks with option buttons")
+c.post(f"/c/{chief}/send", data={"text": "Blue"})
+check(wait_for(chief, r"Mock reply to: Blue"), "the answer reaches the agent")
+
+c.post(f"/c/{forge}/send", data={"text": "e2e bg"})
+check(wait_for(forge, r"bg-done", 60), "background process runs and its log is read back")
+
+c.post(f"/c/{forge}/send", data={"text": "e2e tool"})
+html = wait_for(forge, r'data-approval-id="(\d+)"[^>]*>\s*<div class="callout-head"><span><strong>Forge</strong> wants to run <code>tool_create')
+check(html is not None, "building a tool asks the owner first")
+aid = re.findall(r'data-approval-id="(\d+)"', html)[-1]
+c.post(f"/approvals/{aid}", data={"decision": "once", "args": ""}, headers={"x-requested-with": "fetch"})
+check(wait_for(forge, r"registered for the whole team"), "self-built tool registered after a passing test run")
+check("e2e_echo" in c.get("/settings").text, "self-built tool listed in settings")
+
+c.post(f"/c/{forge}/send", data={"text": "e2e goal"})
+end = time.time() + 120
+status = ""
+while time.time() < end:
+    page = c.get("/goals").text
+    m = re.search(r'<span class="tag (\w+)">(\w+)</span>\s*<h3><a href="/goals/(\d+)">#\d+ E2E goal', page)
+    status = m.group(2) if m else ""
+    if status == "done":
+        break
+    time.sleep(2)
+check(status == "done", f"goal ran across turns and passed verification (status: {status or 'missing'})")
+check((c.get("/files/e2e-goal.txt", params={"raw": 1}).text == "goal done"), "goal's deliverable exists")
+
+for path in ("/computer", "/approvals", "/routines", "/skills", "/settings", "/activity", "/files", "/agents",
+             "/goals", "/agents/forge"):
     check(c.get(path).status_code == 200, f"page {path}")
 print("\nAll smoke checks passed.")

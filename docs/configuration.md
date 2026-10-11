@@ -28,6 +28,20 @@ Everything that needs a restart lives in `.env` (start from `.env.example`, or r
 | `DROK_STT_MODEL` | - | Speech-to-text for Telegram voice notes, e.g. `openai/whisper-1` or `groq/whisper-large-v3`. |
 | `DROK_TTS_MODEL` / `DROK_TTS_VOICE` | - / `alloy` | Voice replies to voice notes, e.g. `openai/gpt-4o-mini-tts`. |
 | `DROK_SECRET_KEY` | generated | Fernet key for secrets. Generated into `data/.secret.key` if unset. |
+| `DROK_AUX_MODEL` | reviewer or agent model | Background work: summaries, compression, reflection, goal verification. A fast cheap model is ideal. |
+| `DROK_LEARNING` | `on` | Post-turn reflection that saves memory and skills. |
+| `DROK_CONTEXT_CHARS` | `320000` | Compress long turns beyond this (~4 chars per token). Lower it for small-context local models. |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | - | OAuth client (type Desktop app) for Gmail, Drive and Calendar. |
+| `GOOGLE_REDIRECT_URI` | `http://localhost:<DROK_PORT>/oauth/google/callback` | Only if you use a Web-application client with HTTPS. |
+
+## Google (Gmail, Drive, Calendar)
+
+1. [Google Cloud Console](https://console.cloud.google.com/): create a project; under *APIs & Services → Library* enable **Gmail API**, **Google Drive API** and **Google Calendar API**.
+2. *OAuth consent screen*: External; add your Google account as a test user. Apps left in *Testing* get refresh tokens that expire after 7 days - for an always-on setup, press **Publish app** (it's for your own use; Google shows an "unverified app" warning you can continue past).
+3. *Credentials → Create credentials → OAuth client ID → Desktop app*. Copy the client ID and secret into `.env` as `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, then `docker compose up -d`.
+4. Settings → Google → **Connect Google**, approve. Google then redirects to `http://localhost:8080/oauth/google/callback?...`. On the server itself that completes on its own; from another device the page fails to load - copy the address from the address bar and paste it into the box on the Settings page.
+
+Scopes requested: Gmail modify (read, label, draft, send - sending always needs your approval), Drive (full), Calendar events. Tokens are stored encrypted and refreshed automatically; **Disconnect** revokes them.
 
 ## Telegram, step by step
 
