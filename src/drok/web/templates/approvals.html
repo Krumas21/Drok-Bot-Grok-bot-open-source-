@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Approvals{% endblock %}
+{% block page %}approvals{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div><h1>Approvals</h1><p>Agents pause here before anything that sends, buys, publishes, deletes or changes production. Edit the arguments to approve a corrected version.</p></div>
+  </div>
+
+  <div class="section">
+    {% for ap in pending_list %}
+      {% set a = agent_map.get(ap.agent_id) %}
+      <div class="callout pending" data-approval-row data-approval-id="{{ ap.id }}" style="margin-bottom: 16px; --c: {{ a.color if a else 'var(--ink)' }}">
+        <div class="callout-head"><span><strong>{{ a.name if a else ap.agent_id }}</strong> wants to run <code>{{ ap.tool }}</code></span><span>{{ ap.created_at | ago }}</span></div>
+        <div class="why">{{ ap.reason }}</div>
+        <form method="post" action="/approvals/{{ ap.id }}" data-approval data-remove>
+          <textarea name="args" class="code">{{ ap.args | tojson_pretty }}</textarea>
+          <div class="row">
+            <button class="btn primary small" name="decision" value="once">Allow once</button>
+            <button class="btn small" name="decision" value="always">Always allow</button>
+            <button class="btn danger small" name="decision" value="deny">Deny</button>
+          </div>
+        </form>
+      </div>
+    {% else %}
+      <div class="empty"><strong>Nothing waiting on you.</strong>When an agent hits something that needs your OK, it shows up here, in its chat, and on Telegram.</div>
+    {% endfor %}
+  </div>
+
+  {% if recent %}
+  <div class="section">
+    <div class="section-head"><h2>Recently decided</h2></div>
+    <table class="ledger">
+      <thead><tr><th>When</th><th>Agent</th><th>Tool</th><th>Arguments</th><th>Decision</th></tr></thead>
+      <tbody>
+      {% for ap in recent %}
+        <tr><td>{{ ap.decided_at | ago }}</td><td>{{ ap.agent_id }}</td><td class="mono">{{ ap.tool }}</td>
+          <td class="mono" style="max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ ap.args | json }}</td>
+          <td><span class="tag {{ ap.status }}">{{ ap.status }}</span></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

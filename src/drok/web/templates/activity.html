@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Activity{% endblock %}
+{% block page %}activity{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head"><div><h1>Activity</h1><p>Every tool call, its safety decision and result - the audit trail. Plus token usage for the last 7 days.</p></div></div>
+
+  <div class="section">
+    <div class="section-head"><h2>Token usage · 7 days</h2></div>
+    <table class="ledger">
+      <thead><tr><th>Agent</th><th>Model</th><th style="text-align: right">Calls</th><th style="text-align: right">Input</th><th style="text-align: right">Output</th></tr></thead>
+      <tbody>
+      {% for u in usage %}
+        <tr><td>{{ u.agent_id }}</td><td class="mono">{{ u.model }}</td><td class="mono" style="text-align: right">{{ u.n }}</td>
+          <td class="mono" style="text-align: right">{{ "{:,}".format(u.p) }}</td><td class="mono" style="text-align: right">{{ "{:,}".format(u.c) }}</td></tr>
+      {% else %}<tr><td colspan="5" class="hint">No model calls yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <div class="section-head"><h2>Audit log</h2><p>Latest 200</p></div>
+    <table class="ledger">
+      <thead><tr><th>When</th><th>Agent</th><th>Tool</th><th>Arguments</th><th>Decision</th><th style="text-align: right">ms</th></tr></thead>
+      <tbody>
+      {% for e in audit %}
+        <tr><td style="white-space: nowrap">{{ e.created_at | ago }}</td><td>{{ e.agent_id }}</td><td class="mono">{{ e.tool }}</td>
+          <td><details><summary class="mono" style="max-width: 460px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ e.args | json }}</summary>
+            <pre class="mono" style="font-size: 0.75rem; max-height: 240px; overflow: auto">{{ e.result }}</pre></details></td>
+          <td><span class="tag {{ e.decision }}" title="{{ e.reason }}">{{ e.decision }}</span></td><td class="mono" style="text-align: right">{{ e.duration_ms }}</td></tr>
+      {% else %}<tr><td colspan="6" class="hint">Nothing yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

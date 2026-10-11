@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Routines{% endblock %}
+{% block page %}routines{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div><h1>Routines</h1><p>Work that runs without you: on a schedule, or when a webhook fires. Each routine belongs to one agent. If you go quiet for a long time, routines pause themselves.</p></div>
+  </div>
+
+  <div class="section">
+    {% for r in routines %}
+      {% set a = agent_map.get(r.agent_id) %}
+      <details class="panel" style="margin-bottom: 12px; padding: 14px 18px">
+        <summary class="row" style="justify-content: space-between">
+          <span class="row"><span class="chip" style="--c: {{ a.color if a else 'var(--ink)' }}"><i></i>{{ a.name if a else r.agent_id }}</span>
+            <strong>{{ r.name }}</strong>
+            <span class="mono hint">{{ r.cron if r.kind == 'schedule' else 'webhook' }} {{ r.tz if r.kind == 'schedule' }}</span></span>
+          <span class="row">
+            {% if r.enabled %}<span class="hint">{% if r.kind == 'schedule' %}next {{ fmt(r.next_run_at, r.tz) }}{% else %}listening{% endif %}</span>
+            {% else %}<span class="tag off">paused{{ ' - ' ~ r.paused_reason if r.paused_reason }}</span>{% endif %}
+            <form method="post" action="/routines/{{ r.id }}/toggle" class="inline"><button class="btn small">{{ 'Pause' if r.enabled else 'Resume' }}</button></form>
+            <form method="post" action="/routines/{{ r.id }}/test" class="inline"><button class="btn small" title="Runs for real: it can change files and call tools">Test run</button></form>
+          </span>
+        </summary>
+        <div style="margin-top: 14px">
+          {% if r.kind == 'webhook' %}
+            <div class="field"><label>Webhook URL</label><input class="code" readonly value="{{ public_url }}/hooks/{{ r.id }}?secret={{ r.secret }}" onclick="this.select()">
+              <div class="hint">POST anything here (GitHub, Zapier, a cron job, a form). Or send the secret in an <code>X-Drok-Secret</code> header. {% if r.match %}Fires only when the payload contains “{{ r.match }}”.{% endif %}</div></div>
+          {% endif %}
+          <form method="post" action="/routines/{{ r.id }}/edit">
+            <div class="grid2">
+              <div class="field"><label>Name</label><input name="name" value="{{ r.name }}"></div>
+              {% if r.kind == 'schedule' %}
+                <div class="field"><label>Cron</label><input name="cron" class="code" value="{{ r.cron }}"></div>
+                <div class="field"><label>Timezone</label><input name="tz" class="code" value="{{ r.tz }}"></div>
+              {% else %}
+                <div class="field"><label>Only when payload contains</label><input name="match" value="{{ r.match }}"></div>
+              {% endif %}
+            </div>
+            <div class="field"><label>Instructions</label><textarea name="instructions" rows="4">{{ r.instructions }}</textarea></div>
+            <div class="row"><button class="btn primary small">Save</button></div>
+          </form>
+          <form method="post" action="/routines/{{ r.id }}/delete" onsubmit="return confirm('Delete this routine? There is no undo.')" style="margin-top: 8px"><button class="btn danger small">Delete</button></form>
+
+          <h3 style="margin: 20px 0 8px">Last runs</h3>
+          {% for run in runs[r.id] %}
+            <div style="padding: 6px 0; border-bottom: 1px solid var(--rule)"><span class="tag {{ run.status }}">{{ run.status }}</span> <span class="hint">{{ run.started_at | ago }}</span>
+              {% if run.result %}<div class="hint" style="white-space: pre-wrap">{{ run.result[:400] }}</div>{% endif %}</div>
+          {% else %}<p class="hint">No runs yet.</p>{% endfor %}
+        </div>
+      </details>
+    {% else %}
+      <div class="empty"><strong>No routines yet.</strong>Ask your lead agent in plain words - “every weekday at 8, send me a briefing” - or add one below.</div>
+    {% endfor %}
+  </div>
+
+  <form class="panel" method="post" action="/routines" style="max-width: 760px">
+    <h2 style="margin-bottom: 16px">New routine</h2>
+    <div class="grid2">
+      <div class="field"><label>Owner</label><select name="agent_id">{% for a in agents %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select></div>
+      <div class="field"><label>Name</label><input name="name" required placeholder="Morning briefing"></div>
+    </div>
+    <div class="field"><label>Instructions</label><textarea name="instructions" rows="4" required placeholder="Use the morning-briefing skill. If calendar access is missing, say so instead of guessing. Send the result with notify_owner."></textarea></div>
+    <div class="grid2">
+      <div class="field"><label>Trigger</label><select name="kind"><option value="schedule">Schedule</option><option value="webhook">Webhook</option></select></div>
+      <div class="field"><label>Cron <span class="hint">min 5 min apart</span></label><input name="cron" class="code" placeholder="0 8 * * 1-5"></div>
+      <div class="field"><label>Timezone</label><input name="tz" class="code" value="{{ tz }}"></div>
+      <div class="field"><label>Webhook filter <span class="hint">optional</span></label><input name="match" placeholder="pull_request"></div>
+    </div>
+    <button class="btn primary">Create routine</button>
+  </form>
+</div>
+{% endblock %}

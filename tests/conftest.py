@@ -44,7 +44,7 @@ class FakeComputer:
         self.commands: list[str] = []
         self.locks = {}
 
-    async def exec(self, command, timeout=120, cwd="/workspace"):
+    async def exec(self, command, timeout=120, cwd="/workspace", screen=1):
         self.commands.append(command)
         return {"exit_code": 0, "output": f"ran: {command}"}
 

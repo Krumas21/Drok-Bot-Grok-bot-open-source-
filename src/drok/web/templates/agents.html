@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Team{% endblock %}
+{% block page %}agents{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div><h1>Team</h1><p>Narrow, single-purpose agents beat one generalist. Each gets a role, a model, its own memory and its own screen on the shared computer.</p></div>
+  </div>
+
+  <div class="section">
+    <table class="ledger">
+      <thead><tr><th>Agent</th><th>Role</th><th>Model</th><th>Screen</th><th></th></tr></thead>
+      <tbody>
+      {% for a in agents %}
+        <tr>
+          <td><span class="chip" style="--c: {{ a.color }}"><i></i><a href="/c/{{ dm_ids[a.id] }}">{{ a.name }}</a></span>{% if a.is_orchestrator %} <span class="tag">lead</span>{% endif %}</td>
+          <td>{{ a.title }}<div class="hint">{{ a.description }}</div></td>
+          <td class="mono">{{ a.model }}</td>
+          <td>#{{ a.screen }}</td>
+          <td><a class="btn small" href="/agents/{{ a.id }}">Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="grid2">
+    <form class="panel" method="post" action="/agents">
+      <h2 style="margin-bottom: 16px">Hire an agent</h2>
+      <div class="grid2">
+        <div class="field"><label>Name</label><input name="name" required placeholder="Quill"></div>
+        <div class="field"><label>Title</label><input name="title" placeholder="Writer"></div>
+      </div>
+      <div class="field"><label>Description <span class="hint">Teammates read this to decide what to hand over.</span></label>
+        <input name="description" placeholder="Drafts posts, emails and docs in the owner's voice."></div>
+      <div class="field"><label>Role instructions</label>
+        <textarea name="system_prompt" rows="5" placeholder="How this agent works: standards, deliverables, where it saves files, what needs approval."></textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Model</label><input name="model" class="code" placeholder="{{ default_model }}">
+          <div class="hint">provider/model · configured: {{ providers.keys() | join(', ') or 'none - add a key to .env' }}</div></div>
+        <div class="field"><label>Fallbacks</label><input name="fallbacks" class="code" placeholder="openrouter/x-ai/grok-4, ollama/qwen3"></div>
+      </div>
+      <div class="field"><label>Tools</label><input name="tools" class="code" value="*"><div class="hint">Comma-separated names or patterns, e.g. <code>*</code> or <code>browser, memory_*, message_agent</code></div></div>
+      <button class="btn primary">Hire</button>
+    </form>
+
+    <form class="panel" method="post" action="/groups" id="group">
+      <h2 style="margin-bottom: 6px">Start a group</h2>
+      <p class="hint" style="margin: 0 0 16px">2-6 agents in one room for shared outcomes with visible handoffs.</p>
+      <div class="field"><label>Name</label><input name="title" placeholder="Product launch"></div>
+      <div class="field">
+        <label>Members</label>
+        {% for a in agents %}
+          <label style="font-weight: 500; display: flex; gap: 8px; align-items: center"><input type="checkbox" name="members" value="{{ a.id }}" style="width: auto"> {{ a.name }} <span class="hint">{{ a.title }}</span></label>
+        {% endfor %}
+      </div>
+      <button class="btn primary">Create group</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

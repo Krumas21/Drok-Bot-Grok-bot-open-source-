@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Drok</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='3' y='3' width='10' height='10' transform='rotate(45 8 8)' fill='%23e8642c'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Hanken+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/drok.css">
+</head>
+<body>
+<main class="login">
+  <section class="login-art">
+    <div class="brand" style="padding: 0; color: inherit"><span class="brand-mark"></span>drok</div>
+    <h1>Your team <em>never</em> clocks out.</h1>
+    <p style="max-width: 40ch; opacity: 0.75">Agents with their own roles and screens, working on your server around the clock. You approve what matters.</p>
+  </section>
+  <section class="login-form">
+    <form method="post" action="/login">
+      <h2 style="margin-bottom: 16px">Sign in</h2>
+      <div class="field">
+        <label for="pw">Admin password</label>
+        <input id="pw" name="password" type="password" autocomplete="current-password" required autofocus>
+        {% if error %}<div class="hint" style="color: var(--bad)">That's not it. The password is DROK_ADMIN_PASSWORD in your .env.</div>{% endif %}
+      </div>
+      <button class="btn primary" style="width: 100%; justify-content: center">Enter the workshop</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>

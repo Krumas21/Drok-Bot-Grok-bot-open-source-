@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ a.name }}{% endblock %}
+{% block page %}agent{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div class="row" style="gap: 14px">
+      <span data-agent="{{ a.id }}" data-status="{{ a.status }}" style="--c: {{ a.color }}"><span class="glyph" style="width: 40px; height: 40px; font-size: 1.2rem">{{ a.name[0] }}</span></span>
+      <div><h1>{{ a.name }}</h1><p>{{ a.title }}</p></div>
+    </div>
+    <a class="btn" href="/c/{{ dm_ids[a.id] }}">Open chat</a>
+  </div>
+
+  <div class="grid2" style="align-items: start">
+    <form class="panel" method="post" action="/agents/{{ a.id }}">
+      <h2 style="margin-bottom: 16px">Role</h2>
+      <div class="grid2">
+        <div class="field"><label>Name</label><input name="name" value="{{ a.name }}" required></div>
+        <div class="field"><label>Title</label><input name="title" value="{{ a.title }}"></div>
+      </div>
+      <div class="field"><label>Description</label><input name="description" value="{{ a.description }}"></div>
+      <div class="field"><label>Role instructions</label><textarea name="system_prompt" rows="10">{{ a.system_prompt }}</textarea></div>
+      <div class="grid2">
+        <div class="field"><label>Model</label><input name="model" class="code" value="{{ a.model }}"><div class="hint">configured: {{ providers.keys() | join(', ') or 'none' }}</div></div>
+        <div class="field"><label>Fallbacks</label><input name="fallbacks" class="code" value="{{ a.fallbacks | join(', ') }}"></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label>Tools</label><input name="tools" class="code" value="{{ a.tools | join(', ') }}">
+          <details class="hint"><summary>available tools</summary>{{ tool_names | join(', ') }}</details></div>
+        <div class="field"><label>Screen</label><input name="screen" type="number" min="1" value="{{ a.screen }}"></div>
+      </div>
+      <div class="field"><label style="display: flex; gap: 8px; font-weight: 500"><input type="checkbox" name="is_orchestrator" value="1" style="width: auto" {% if a.is_orchestrator %}checked{% endif %}> Team lead (talks to you on Telegram)</label></div>
+      <div class="row">
+        <button class="btn primary">Save</button>
+      </div>
+    </form>
+
+    <div>
+      <div class="section">
+        <div class="section-head"><h2>Memory</h2><p>Private to {{ a.name }} unless marked shared.</p></div>
+        <form method="post" action="/agents/{{ a.id }}/memory" class="row" style="margin-bottom: 12px; flex-wrap: nowrap">
+          <input name="content" placeholder="Something {{ a.name }} should always know" required>
+          <label style="display: flex; gap: 6px; margin: 0; font-weight: 500; white-space: nowrap"><input type="checkbox" name="shared" value="1" style="width: auto"> shared</label>
+          <button class="btn small">Add</button>
+        </form>
+        {% for m in memories %}
+          <div class="row" style="justify-content: space-between; flex-wrap: nowrap; padding: 6px 0; border-bottom: 1px solid var(--rule)">
+            <span>{{ m.content }} {% if m.agent_id is none %}<span class="tag">shared</span>{% endif %}</span>
+            <form method="post" action="/memories/{{ m.id }}/delete" class="inline"><button class="btn ghost small" aria-label="Forget">Forget</button></form>
+          </div>
+        {% else %}
+          <p class="hint">Nothing yet. {{ a.name }} saves preferences, decisions and lessons here as it works.</p>
+        {% endfor %}
+      </div>
+
+      <div class="section">
+        <div class="section-head"><h2>Routines</h2><a href="/routines" class="hint">Manage</a></div>
+        {% for r in routines %}<div>{{ r.name }} <span class="mono hint">{{ r.cron or 'webhook' }}</span> <span class="tag {{ 'on' if r.enabled else 'off' }}">{{ 'on' if r.enabled else 'paused' }}</span></div>
+        {% else %}<p class="hint">None.</p>{% endfor %}
+      </div>
+
+      <form method="post" action="/agents/{{ a.id }}/delete" onsubmit="return confirm('Fire {{ a.name }}? Its routines are deleted. Files on the computer stay.')">
+        <button class="btn danger small">Remove {{ a.name }}</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

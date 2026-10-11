@@ -1,0 +1,36 @@
+services:
+  drok:
+    build: .
+    image: drok:latest
+    env_file: .env
+    environment:
+      COMPUTER_URL: http://computer:7000
+      DROK_PORT: "8080"
+    ports:
+      - "${DROK_BIND:-0.0.0.0}:${DROK_PORT:-8080}:8080"
+    volumes:
+      - ./data:/data
+      - ./workspace:/workspace
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # reach Ollama / LM Studio running on the host
+    depends_on:
+      computer:
+        condition: service_healthy
+    restart: unless-stopped
+
+  computer:
+    build: ./computer
+    image: drok-computer:latest
+    environment:
+      COMPUTER_TOKEN: ${COMPUTER_TOKEN:?run scripts/setup.sh or set COMPUTER_TOKEN in .env}
+      DROK_SCREENS: ${DROK_SCREENS:-4}
+      TZ: ${TZ:-UTC}
+    volumes:
+      - ./workspace:/workspace
+      - computer-home:/home/drok # browser logins, CLI credentials, installed tools
+    shm_size: 2gb
+    # No published ports: only the core container can reach the computer.
+    restart: unless-stopped
+
+volumes:
+  computer-home:

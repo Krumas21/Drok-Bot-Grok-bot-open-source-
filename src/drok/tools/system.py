@@ -29,7 +29,8 @@ def _ws_path(ctx: ToolContext, path: str) -> Path:
 
 
 async def shell(ctx: ToolContext, command: str, timeout: int = 120) -> str:
-    r = await ctx.app.computer.exec(ctx.app.vault.fill(command), timeout=min(max(timeout, 1), 1800))
+    r = await ctx.app.computer.exec(ctx.app.vault.fill(command), timeout=min(max(timeout, 1), 1800),
+                                   screen=ctx.agent["screen"])
     return f"exit code: {r['exit_code']}\n{_clip(r['output'])}"
 
 

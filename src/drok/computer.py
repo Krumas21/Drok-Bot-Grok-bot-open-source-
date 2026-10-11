@@ -32,8 +32,9 @@ class Computer:
             raise ComputerError(f"computer error {r.status_code}: {r.text[:300]}")
         return r.json()
 
-    async def exec(self, command: str, timeout: float = 120, cwd: str = "/workspace") -> dict:
-        return await self._post("/exec", timeout=timeout + 15, command=command, timeout_s=timeout, cwd=cwd)
+    async def exec(self, command: str, timeout: float = 120, cwd: str = "/workspace", screen: int = 1) -> dict:
+        return await self._post("/exec", timeout=timeout + 15, command=command, timeout_s=timeout, cwd=cwd,
+                                screen=screen)
 
     async def screenshot(self, screen: int) -> str:
         return (await self._post("/screenshot", screen=screen))["png"]

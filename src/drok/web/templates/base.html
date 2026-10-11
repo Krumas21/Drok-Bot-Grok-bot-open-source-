@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Drok{% endblock %} · Drok</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect x='3' y='3' width='10' height='10' transform='rotate(45 8 8)' fill='%23e8642c'/></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Hanken+Grotesk:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/drok.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/15.0.12/marked.min.js" defer></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js" defer></script>
+  <script src="/static/drok.js" defer></script>
+  {% block head %}{% endblock %}
+</head>
+<body data-page="{% block page %}{% endblock %}" {% block bodyattrs %}{% endblock %}>
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <a class="brand" href="/"><span class="brand-mark"></span>drok <small>v0.1</small></a>
+
+    <div class="rail-label">Team <a href="/agents" title="Manage agents" aria-label="Manage agents">+</a></div>
+    {% for a in agents %}
+      {% set cid = dm_ids[a.id] %}
+      <a class="station" href="/c/{{ cid }}" data-conv="{{ cid }}" data-agent="{{ a.id }}" data-status="{{ a.status }}"
+         style="--c: {{ a.color }}" {% if path == '/c/' ~ cid %}aria-current="page"{% endif %}>
+        <span class="glyph">{{ a.name[0] }}</span>
+        <span><div class="station-name">{{ a.name }}</div><div class="station-title">{{ a.title or 'Agent' }}{% if a.is_orchestrator %} · lead{% endif %}</div></span>
+        <span class="unread"></span>
+      </a>
+    {% endfor %}
+
+    <div class="rail-label">Groups</div>
+    {% for g in groups %}
+      <a class="station" href="/c/{{ g.id }}" data-conv="{{ g.id }}" {% if path == '/c/' ~ g.id %}aria-current="page"{% endif %}>
+        <span class="glyph" style="background: var(--ink-2)">#</span>
+        <span><div class="station-name">{{ g.title }}</div><div class="station-title">{{ g.members | length }} agents</div></span>
+        <span class="unread"></span>
+      </a>
+    {% else %}
+      <a class="navlink" href="/agents#group">Start a group…</a>
+    {% endfor %}
+
+    <div class="rail-label">Workshop</div>
+    <a class="navlink" href="/approvals" {% if path == '/approvals' %}aria-current="page"{% endif %}>Approvals <span class="badge" data-pending data-count="{{ pending }}">{{ pending }}</span></a>
+    <a class="navlink" href="/computer" {% if path == '/computer' %}aria-current="page"{% endif %}>Computer</a>
+    <a class="navlink" href="/routines" {% if path == '/routines' %}aria-current="page"{% endif %}>Routines</a>
+    <a class="navlink" href="/skills" {% if path.startswith('/skills') %}aria-current="page"{% endif %}>Skills</a>
+    <a class="navlink" href="/files" {% if path.startswith('/files') %}aria-current="page"{% endif %}>Files</a>
+    <a class="navlink" href="/activity" {% if path == '/activity' %}aria-current="page"{% endif %}>Activity</a>
+    <a class="navlink" href="/settings" {% if path == '/settings' %}aria-current="page"{% endif %}>Settings</a>
+
+    <div class="rail-foot">
+      <button class="btn ghost small" data-theme-toggle type="button">Light / dark</button>
+      <form method="post" action="/logout" class="inline"><button class="btn ghost small">Log out</button></form>
+    </div>
+  </nav>
+  <div class="main">
+    <div class="mobile-bar">
+      <button class="btn small" data-rail-toggle type="button" aria-label="Open menu">Menu</button>
+      <strong style="font-family: var(--display)">drok</strong>
+    </div>
+    {% block main %}{% endblock %}
+  </div>
+</div>
+</body>
+</html>

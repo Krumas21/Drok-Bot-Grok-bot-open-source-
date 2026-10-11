@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Files{% endblock %}
+{% block page %}files{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div>
+      <div class="mono hint"><a href="/files">/workspace</a>{% set parts = path.split('/') if path else [] %}{% for p in parts %}/<a href="/files/{{ parts[:loop.index] | join('/') }}">{{ p }}</a>{% endfor %}</div>
+      <h1>{{ parts[-1] if parts else 'Workspace' }}</h1>
+    </div>
+    {% if text is not none %}<a class="btn small" href="/files/{{ path }}?raw=1">Download</a>{% endif %}
+  </div>
+  {% if text is not none %}
+    {% if path.endswith('.md') %}<div class="md panel" data-raw>{{ text }}</div>
+    {% else %}<pre class="panel mono" style="font-size: 0.8rem; overflow-x: auto">{{ text }}</pre>{% endif %}
+  {% else %}
+    <table class="ledger">
+      <thead><tr><th>Name</th><th style="text-align: right">Size</th><th>Modified</th></tr></thead>
+      <tbody>
+      {% for e in entries %}
+        <tr><td class="mono"><a href="/files/{{ e.rel }}">{{ e.name }}{{ '/' if e.dir }}</a></td>
+          <td class="mono" style="text-align: right">{{ '' if e.dir else (e.size | filesizeformat) }}</td><td>{{ e.mtime | ago }}</td></tr>
+      {% else %}<tr><td colspan="3" class="empty">Empty. Agents put their work here.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import logging
+import re
 
 from . import Tool, ToolContext, ToolResult, i, params, s
 
@@ -73,6 +74,7 @@ class Browsers:
                 log.debug("browser close: %s", e)
         if self._pw:
             await self._pw.stop()
+        self._pw, self._browsers, self._pages = None, {}, {}
 
 
 async def computer(ctx: ToolContext, action: str, x: int = 0, y: int = 0, text: str = "", key: str = "",
@@ -98,7 +100,8 @@ async def browser(ctx: ToolContext, action: str, url: str = "", ref: int = 0, el
         page = await app.browsers.page(screen)
         target = f'[data-drok-ref="{ref}"]'
         if action == "goto":
-            await page.goto(url if "://" in url else f"https://{url}", wait_until="domcontentloaded", timeout=45000)
+            await page.goto(url if re.match(r"^[a-z][a-z0-9+.-]*:", url, re.I) else f"https://{url}",
+                            wait_until="domcontentloaded", timeout=45000)
         elif action == "click":
             await page.click(target, timeout=10000)
         elif action == "fill":

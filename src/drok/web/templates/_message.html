@@ -1,0 +1,59 @@
+{%- set a = agent_map.get(m.author) -%}
+{%- set name = 'You' if m.author == 'user' else (a.name if a else m.author) -%}
+<div class="msg {{ m.kind }} {{ 'user' if m.author == 'user' else 'agent' }}{% if m.meta.error %} error{% endif %}"
+     id="m{{ m.id }}" data-id="{{ m.id }}" data-author="{{ m.author }}" style="--c: {{ a.color if a else 'var(--ink)' }}">
+  <div class="msg-time">{{ m.created_at | clock }}</div>
+  <div class="msg-body">
+  {%- if m.kind == 'tool' %}
+    <details class="toolline">
+      <summary><span class="tname">{{ m.meta.tool }}</span><span class="tsubj">{{ m.content }}</span><span class="tms">{{ (m.meta.ms / 1000) | round(1) }}s</span></summary>
+      <pre>{{ m.meta.preview }}</pre>
+    </details>
+  {%- elif m.kind == 'approval' %}
+    {%- set st = m.meta.status %}
+    <div class="callout {{ st }}" data-approval-id="{{ m.meta.approval_id }}">
+      <div class="callout-head"><span><strong>{{ name }}</strong> wants to run <code>{{ m.meta.tool }}</code></span><span class="tag {{ st }}">{{ st }}</span></div>
+      <pre>{{ m.content }}</pre>
+      <div class="why">{{ m.meta.reason }}</div>
+      {%- if st == 'pending' %}
+      <form method="post" action="/approvals/{{ m.meta.approval_id }}" data-approval>
+        <details><summary class="hint" style="margin-bottom: 8px">Edit arguments before approving</summary>
+          <textarea name="args" class="code">{{ m.meta.args | tojson_pretty }}</textarea>
+        </details>
+        <div class="row">
+          <button class="btn primary small" name="decision" value="once">Allow once</button>
+          <button class="btn small" name="decision" value="always">Always allow</button>
+          <button class="btn danger small" name="decision" value="deny">Deny</button>
+        </div>
+      </form>
+      {%- endif %}
+    </div>
+  {%- elif m.kind == 'request' %}
+    <div class="callout pending">
+      <div class="callout-head"><span><strong>{{ name }}</strong>
+        {% if m.meta.request == 'secret' %}needs a secret: <code>{{ m.meta.name }}</code>{% else %}needs you on screen {{ m.meta.screen }}{% endif %}</span></div>
+      <div class="md" data-raw>{{ m.content }}</div>
+      <div class="row" style="margin-top: 10px">
+        {% if m.meta.request == 'secret' %}
+          <a class="btn primary small" href="/settings?secret={{ m.meta.name }}#secrets">Store it securely</a>
+        {% else %}
+          <a class="btn primary small" href="/computer#screen-{{ m.meta.screen }}">Open screen {{ m.meta.screen }}</a>
+          <form method="post" action="/agents/{{ m.author }}/handback" class="inline"><button class="btn small">I'm done - hand back</button></form>
+        {% endif %}
+      </div>
+    </div>
+  {%- elif m.kind == 'handoff' %}
+    {%- set to = agent_map.get(m.meta.to) %}
+    <div class="msg-author">{{ name }}</div>
+    <div class="handoff"><span class="handoff-arrow" style="--c2: {{ to.color if to else 'var(--ink)' }}">→ {{ to.name if to else m.meta.to }}</span>
+      <div class="md" data-raw>{{ m.content }}</div></div>
+  {%- elif m.kind in ('status', 'progress') %}
+    <div class="md" data-raw>{{ m.content }}</div>
+  {%- else %}
+    <div class="msg-card">
+      <div class="msg-author">{{ name }}{% if m.meta.source == 'telegram' %} <span class="hint">via Telegram</span>{% endif %}{% if m.meta.routine_id %} <span class="hint">routine</span>{% endif %}</div>
+      <div class="md" data-raw>{{ m.content }}</div>
+    </div>
+  {%- endif %}
+  </div>
+</div>

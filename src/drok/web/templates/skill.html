@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ slug }}{% endblock %}
+{% block page %}skill{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div><a href="/skills" class="hint">← Skills</a><h1 class="mono" style="font-size: 1.4rem">{{ slug if skill else 'New skill' }}</h1>
+      {% if skill and skill.draft %}<p><span class="tag pending">draft</span> Learned from a demonstration. Check the steps, add decision rules and approval boundaries, test it on a safe example, then delete the <code>draft: true</code> line.</p>{% endif %}</div>
+  </div>
+  <form method="post" action="/skills/{{ slug }}">
+    <div class="field"><textarea name="raw" class="code" rows="28" style="min-height: 60vh">{{ raw }}</textarea>
+      <div class="hint">Front matter needs <code>name</code> and <code>description</code>. Agents see the description in their skills index and read the body before doing the task.</div></div>
+    <div class="row"><button class="btn primary">Save</button></div>
+  </form>
+  {% if skill %}
+  <form method="post" action="/skills/{{ slug }}/delete" onsubmit="return confirm('Delete this skill?')" style="margin-top: 12px"><button class="btn danger small">Delete skill</button></form>
+  {% endif %}
+</div>
+{% endblock %}

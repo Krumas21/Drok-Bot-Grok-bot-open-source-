@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ agent.name if agent else conv.title }}{% endblock %}
+{% block page %}chat{% endblock %}
+{% block bodyattrs %}data-conversation="{{ conv.id }}" data-last-id="{{ last_id }}"{% endblock %}
+{% block head %}{% if agent %}<script type="module" src="/static/screen.js"></script>{% endif %}{% endblock %}
+{% block main %}
+<div class="chat {% if agent %}with-screen{% endif %}" id="chat">
+  <section class="convo">
+    <header class="convo-head">
+      {% if agent %}
+        <span data-agent="{{ agent.id }}" data-status="{{ agent.status }}" style="--c: {{ agent.color }}"><span class="glyph">{{ agent.name[0] }}</span></span>
+        <div>
+          <h1>{{ agent.name }}</h1>
+          <div class="convo-sub">{{ agent.title }} <span data-status-text="{{ agent.id }}">{{ {'idle':'idle','working':'working','waiting':'waiting on you','error':'error'}[agent.status] }}</span> · <span class="mono">{{ agent.model }}</span></div>
+        </div>
+        <div class="convo-actions">
+          <button class="btn small" type="button" onclick="document.getElementById('chat').classList.toggle('with-screen')">Screen</button>
+          <button class="btn small" type="button" data-stop="{{ agent.id }}">Stop</button>
+          <a class="btn ghost small" href="/agents/{{ agent.id }}">Profile</a>
+        </div>
+      {% else %}
+        <span class="glyph" style="background: var(--ink-2)">#</span>
+        <div>
+          <h1>{{ conv.title }}</h1>
+          <div class="convo-sub">
+            {% for a in members %}<span class="chip" style="--c: {{ a.color }}; margin-right: 8px"><i></i>{{ a.name }}</span>{% endfor %}
+          </div>
+        </div>
+        <div class="convo-actions">
+          <form method="post" action="/groups/{{ conv.id }}/delete" class="inline" onsubmit="return confirm('Delete this group and its messages?')"><button class="btn ghost small danger">Delete group</button></form>
+        </div>
+      {% endif %}
+    </header>
+
+    <div class="timeline">
+      <div class="timeline-inner">
+        {% if messages_html %}{{ messages_html | safe }}{% else %}
+          <div class="empty">
+            {% if agent %}
+              <strong>{{ agent.name }} is ready.</strong>
+              {{ agent.description }}
+              {% if agent.is_orchestrator %}<br><br>Tell it what you need - it delegates to the team and reports back here and on Telegram.{% endif %}
+            {% else %}
+              <strong>A room for {{ members | map(attribute='name') | join(', ') }}.</strong>
+              Mention <code>@{{ members[0].id }}</code> to give one agent the task, or <code>@everyone</code> for a status round. Agents can @mention each other to hand off.
+            {% endif %}
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="composer">
+      <form id="composer" action="/c/{{ conv.id }}/send" method="post">
+        <textarea name="text" rows="1" placeholder="{% if agent %}Message {{ agent.name }}…{% else %}Message the group - @name to assign…{% endif %}" aria-label="Message"></textarea>
+        <button class="btn primary" type="submit">Send</button>
+      </form>
+      <div class="hint">Enter to send · Shift+Enter for a new line{% if skills %} · ask for a skill by name, e.g. “use {{ skills[0].slug }}”{% endif %}</div>
+    </div>
+  </section>
+
+  {% if agent %}
+  <aside class="screenpane" aria-label="{{ agent.name }}'s screen">
+    <div class="screenpane-head"><span>Screen {{ agent.screen }} · live</span><a class="btn ghost small" href="/computer#screen-{{ agent.screen }}">Open in Computer</a></div>
+    <div style="padding: 0 16px 16px">
+      <div class="bezel"><div class="vnc" data-vnc="{{ agent.screen }}"><div class="vnc-state">connecting…</div></div></div>
+    </div>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

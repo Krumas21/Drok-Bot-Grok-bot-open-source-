@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Computer{% endblock %}
+{% block page %}computer{% endblock %}
+{% block head %}<script type="module" src="/static/screen.js"></script>{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>Computer</h1>
+      <p>One shared Linux machine. Files in <code>/workspace</code> are shared by every agent; each agent works on its own screen. Watch live, or take over for logins, 2FA and CAPTCHAs.</p>
+    </div>
+    <div class="row">
+      <span class="tag {{ 'on' if health.ok else 'off' }}">{{ 'healthy' if health.ok else 'unreachable' }}</span>
+      <form method="post" action="/computer/recover" class="inline"><button class="btn small" title="Restart screens and browsers. Files are kept.">Recover</button></form>
+      <form method="post" action="/computer/recover" class="inline" onsubmit="return confirm('Reset wipes browser profiles (all website logins) on every screen. /workspace files are kept. Continue?')">
+        <input type="hidden" name="reset" value="1"><button class="btn small danger">Reset browsers</button></form>
+    </div>
+  </div>
+
+  {% if not health.ok %}
+    <div class="callout" style="margin-bottom: 24px"><strong>The computer isn't answering.</strong>
+      <div class="hint">{{ health.error or 'Some screen processes are down; they restart automatically within seconds.' }} Check <code>docker compose ps</code> and that <code>COMPUTER_TOKEN</code> matches in both containers.</div></div>
+  {% endif %}
+
+  <div class="wall">
+    {% for n in screens %}
+      {% set owners = by_screen.get(n, []) %}
+      {% set rec = teaching[n] %}
+      <div class="monitor" id="screen-{{ n }}">
+        <div class="nameplate">
+          <div class="who"><strong>Screen {{ n }}</strong>
+            {% for a in owners %}<span class="chip" style="--c: {{ a.color }}" data-agent="{{ a.id }}" data-status="{{ a.status }}"><i></i>{{ a.name }}</span>{% endfor %}
+            {% if rec %}<span class="rec">Recording</span>{% endif %}
+          </div>
+          <div class="row">
+            <button class="btn small" type="button" data-takeover="{{ n }}">Take over</button>
+            {% for a in owners %}
+              <form method="post" action="/agents/{{ a.id }}/handback" class="inline"><button class="btn ghost small">Hand back to {{ a.name }}</button></form>
+            {% endfor %}
+          </div>
+        </div>
+        <div class="bezel"><div class="vnc" data-vnc="{{ n }}"><div class="vnc-state">connecting…</div></div></div>
+        {% if rec %}
+          <form method="post" action="/teach/stop" class="row"><input type="hidden" name="screen" value="{{ n }}">
+            <span class="hint">Do the task in the browser on this screen ({{ rec.events | length }} steps so far). Stop to draft a skill.</span>
+            <button class="btn signal small">Stop &amp; draft skill</button></form>
+        {% elif owners %}
+          <details>
+            <summary class="hint">Teach a task on this screen…</summary>
+            <form method="post" action="/teach/start" style="margin-top: 10px">
+              <input type="hidden" name="screen" value="{{ n }}">
+              <div class="row" style="flex-wrap: nowrap">
+                <select name="agent_id" style="width: auto">{% for a in owners %}<option value="{{ a.id }}">{{ a.name }}</option>{% endfor %}</select>
+                <input name="goal" required placeholder="What you're about to demonstrate, e.g. 'export last month's invoices'">
+                <button class="btn small">Start recording</button>
+              </div>
+              <div class="hint">Take over, do it once in the browser (up to 10 min). Password fields are never recorded.</div>
+            </form>
+          </details>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

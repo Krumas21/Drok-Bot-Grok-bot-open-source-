@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Skills{% endblock %}
+{% block page %}skills{% endblock %}
+{% block main %}
+<div class="page">
+  <div class="page-head">
+    <div><h1>Skills</h1><p>Procedures the whole team can follow - steps, decision rules, how to validate, and what needs your approval. Agents save new ones as they learn; you can teach one by demonstration on the Computer page.</p></div>
+    <a class="btn primary" href="/skills/new">Write a skill</a>
+  </div>
+  <table class="ledger">
+    <thead><tr><th>Skill</th><th>What it does</th><th></th></tr></thead>
+    <tbody>
+    {% for s in skills %}
+      <tr><td class="mono"><a href="/skills/{{ s.slug }}">{{ s.slug }}</a> {% if s.draft %}<span class="tag pending">draft</span>{% endif %}</td>
+        <td>{{ s.description }}</td><td><a class="btn small" href="/skills/{{ s.slug }}">Open</a></td></tr>
+    {% else %}
+      <tr><td colspan="3" class="empty">No skills yet.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
