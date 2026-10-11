@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      - run: uv run pytest -q
+
+  e2e:
+    # Full stack in Docker against a scripted mock model: login, shell, browser over CDP, screenshots,
+    # approvals, handoffs, routines and webhooks.
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - name: Start mock model
+        run: nohup uv run python tests/e2e/mock_llm.py > mock.log 2>&1 &
+      - name: Configure
+        run: |
+          ./scripts/setup.sh
+          sed -i 's|^DROK_ADMIN_PASSWORD=.*|DROK_ADMIN_PASSWORD=ci-password|; s|^DROK_DEFAULT_MODEL=.*|DROK_DEFAULT_MODEL=mock/m1|; s|^DROK_SCREENS=.*|DROK_SCREENS=2|' .env
+          echo "DROK_PROVIDER_MOCK_BASE_URL=http://host.docker.internal:9999/v1" >> .env
+          sudo chown -R 1000:1000 data workspace
+      - run: docker compose up -d --build --wait --wait-timeout 300
+      - run: uv run python tests/e2e/smoke.py http://localhost:8080 ci-password
+      - name: Logs on failure
+        if: failure()
+        run: |
+          docker compose ps
+          docker compose logs --tail 300
+          cat mock.log

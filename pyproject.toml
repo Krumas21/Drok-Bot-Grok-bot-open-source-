@@ -23,6 +23,10 @@ dependencies = [
     "uvicorn[standard]>=0.54.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/Krumas21/Drok-Bot-Grok-bot-open-source-"
+Issues = "https://github.com/Krumas21/Drok-Bot-Grok-bot-open-source-/issues"
+
 [project.scripts]
 drok = "drok.__main__:main"
 
