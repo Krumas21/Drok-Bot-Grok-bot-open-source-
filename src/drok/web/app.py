@@ -322,8 +322,11 @@ def create_web(drok: App) -> FastAPI:
                 pass
 
         async def down():
-            while data := await reader.read(65536):
-                await ws.send_bytes(data)
+            try:
+                while data := await reader.read(65536):
+                    await ws.send_bytes(data)
+            except (WebSocketDisconnect, RuntimeError, OSError):
+                pass
 
         tasks = [asyncio.create_task(up()), asyncio.create_task(down())]
         try:
@@ -334,8 +337,8 @@ def create_web(drok: App) -> FastAPI:
             writer.close()
             try:
                 await ws.close()
-            except RuntimeError:
-                pass
+            except (RuntimeError, WebSocketDisconnect):
+                pass  # browser already went away
 
     # ---------------- routines ----------------
     @web.get("/routines", response_class=HTMLResponse)
