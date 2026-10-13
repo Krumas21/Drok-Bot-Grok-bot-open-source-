@@ -436,7 +436,7 @@ class Runtime:
                     self.enqueue(other, conv["id"], f"[{agent['name']} in the group]: {text}", "group",
                                  {"hops": meta.get("hops", 0) + 1})
         self._after(turn, "done", text)
-        self.spawn(self._summarize(turn["conversation_id"], agent))
+        self.spawn(self.summarize(turn["conversation_id"], agent))
         calls = _count_calls(msgs)
         # Goal turns are long by nature; reflecting after each one would mostly re-learn the same thing.
         threshold = REFLECT_AFTER_CALLS * (3 if turn["source"] == "goal" else 1)
@@ -451,16 +451,18 @@ class Runtime:
         self.app.bus.publish({"type": "turn_done", "turn_id": turn["id"], "agent_id": turn["agent_id"],
                               "status": status})
 
-    async def _summarize(self, conversation_id: int, agent: dict) -> None:
-        """Fold old messages into a running summary so long-lived conversations keep fitting in context."""
+    async def summarize(self, conversation_id: int, agent: dict, keep: int = context.HISTORY,
+                        minimum: int = context.HISTORY) -> int:
+        """Fold old messages into a running summary so long-lived conversations keep fitting in context. Keeps the
+        last `keep` messages verbatim; does nothing unless at least `minimum` would be folded. Returns how many were."""
         conv = self.app.conversation(conversation_id)
         if not conv:
-            return
+            return 0
         rows = self.db.all("SELECT id, author, content FROM messages WHERE conversation_id = ? AND id > ? "
                            "AND kind IN ('text','handoff') ORDER BY id", conversation_id, conv["summarized_upto"])
-        if len(rows) < context.HISTORY * 2:
-            return
-        old = rows[:-context.HISTORY]
+        old = rows[:-keep] if keep else rows
+        if len(old) < max(minimum, 1):
+            return 0
         transcript = "\n".join(f"{r['author']}: {r['content'][:2000]}" for r in old)
         try:
             summary = await self.app.llm.text(
@@ -472,5 +474,6 @@ class Runtime:
             )
         except LLMError as e:
             log.warning("summary failed: %s", e)
-            return
+            return 0
         self.db.update("conversations", conversation_id, summary=summary, summarized_upto=old[-1]["id"])
+        return len(old)

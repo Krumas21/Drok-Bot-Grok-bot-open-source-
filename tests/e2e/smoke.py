@@ -150,6 +150,27 @@ goal_page = c.get(f"/goals/{found.group(2)}").text
 check("PASSED" in goal_page, "verifier verdict recorded on the goal timeline")
 check(c.get("/files/e2e-goal.txt", params={"raw": 1}).text == "goal done", "goal's deliverable exists")
 
+# ---------- files in, owner commands, hiring ----------
+m = latest(forge)
+c.post(f"/c/{forge}/send", data={"text": "e2e shell: cat /workspace/inbox/*_upload_e2e.txt"},
+       files={"files": ("upload e2e.txt", b"uploaded-42")})
+check(wait_for(forge, r"/workspace/inbox/\d+_upload_e2e\.txt.*uploaded-42", m), "uploaded file reaches the computer")
+
+m = latest(forge)
+check(c.post(f"/c/{forge}/send", data={"text": "/model mock/m2"}).json() == {"ok": True}, "/model is a command")
+check(wait_for(forge, r"Forge now on mock/m2", m, 10), "/model tests the model and switches")
+m = latest(forge)
+c.post(f"/c/{forge}/send", data={"text": "/new"})
+check(wait_for(forge, r"see the messages above", m, 10), "/new starts a fresh conversation")
+
+m = send(chief, "e2e hire")
+html = wait_for(chief, r'data-approval-id="(\d+)"', m)
+check(html is not None and "agent_create" in html, "hiring an agent asks the owner first")
+aid = re.findall(r'data-approval-id="(\d+)"', html)[-1]
+c.post(f"/approvals/{aid}", data={"decision": "once", "args": ""}, headers={"x-requested-with": "fetch"})
+check(wait_for(chief, r"Created Ledger", m, 30) and c.get("/agents/ledger").status_code == 200,
+      "lead agent hires a new teammate")
+
 for path in ("/computer", "/approvals", "/routines", "/skills", "/settings", "/activity", "/files", "/agents",
              "/goals", "/agents/forge"):
     check(c.get(path).status_code == 200, f"page {path}")

@@ -15,6 +15,30 @@
   $$("[data-rail-toggle]").forEach(b => b.addEventListener("click", () => document.body.classList.toggle("rail-open")));
 
   // ---- markdown ----
+  // Every /workspace/... path an agent mentions becomes a link to the file (view or download).
+  const WS_PATH = /\/workspace\/[^\s`'"<>()[\]{}]*[^\s`'"<>()[\]{}.,;:!?]/g;
+  function linkPaths(el) {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const hits = [];
+    while (walker.nextNode()) {
+      const n = walker.currentNode;
+      if (n.data.includes("/workspace/") && !n.parentElement.closest("a")) hits.push(n);
+    }
+    hits.forEach(n => {
+      const frag = document.createDocumentFragment();
+      let last = 0;
+      for (const m of n.data.matchAll(WS_PATH)) {
+        frag.append(n.data.slice(last, m.index));
+        const a = document.createElement("a");
+        a.href = "/files/" + m[0].slice("/workspace/".length).split("/").map(encodeURIComponent).join("/");
+        a.target = "_blank"; a.textContent = m[0];
+        frag.append(a);
+        last = m.index + m[0].length;
+      }
+      frag.append(n.data.slice(last));
+      n.replaceWith(frag);
+    });
+  }
   function renderMd(scope) {
     $$(".md[data-raw]", scope).forEach(el => {
       const raw = el.textContent;
@@ -23,6 +47,7 @@
         el.innerHTML = DOMPurify.sanitize(marked.parse(raw, { breaks: true }));
         $$("a", el).forEach(a => { a.target = "_blank"; a.rel = "noopener"; });
       }
+      linkPaths(el);
     });
   }
   renderMd(document);
@@ -67,7 +92,7 @@
         const tpl = document.createElement("template");
         tpl.innerHTML = html;
         const nodes = [...tpl.content.children];
-        nodes.forEach(n => { if (!document.getElementById(n.id)) inner.append(n); });
+        nodes.forEach(n => { if (!document.getElementById(n.id)) { n.classList.add("fresh"); inner.append(n); } });
         lastId = Math.max(lastId, ...nodes.map(n => Number(n.dataset.id)));
         renderMd(inner); bindApprovals(inner); markSameAuthor();
         $(".empty", inner)?.remove();
@@ -98,13 +123,36 @@
     ta.addEventListener("keydown", e => {
       if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); }
     });
+    const picker = $("input[type=file]", form);
+    const attached = $("[data-attached]");
+    const showFiles = (note) => {
+      const names = [...picker.files].map(f => f.name).join(", ");
+      attached.textContent = note || (names ? `${names} · ` : "");
+    };
+    $("[data-attach]", form).addEventListener("click", () => picker.click());
+    picker.addEventListener("change", () => showFiles());
+    const convo = $(".convo");
+    convo.addEventListener("dragover", e => {
+      if (![...e.dataTransfer.types].includes("Files")) return;
+      e.preventDefault(); convo.classList.add("dropping");
+    });
+    convo.addEventListener("dragleave", e => { if (!convo.contains(e.relatedTarget)) convo.classList.remove("dropping"); });
+    convo.addEventListener("drop", e => {
+      convo.classList.remove("dropping");
+      if (!e.dataTransfer.files.length) return;
+      e.preventDefault(); picker.files = e.dataTransfer.files; showFiles(); ta.focus();
+    });
     form.addEventListener("submit", async e => {
       e.preventDefault();
       const text = ta.value.trim();
-      if (!text) return;
+      const uploading = picker.files.length > 0;
+      if (!text && !uploading) return;
+      const body = new FormData(form);
       ta.value = ""; grow();
-      const r = await fetch(form.action, { method: "POST", body: new URLSearchParams({ text }) });
-      if (!r.ok) { toast("Couldn't send: " + esc(await r.text())); ta.value = text; }
+      if (uploading) showFiles("Uploading… ");
+      const r = await fetch(form.action, { method: "POST", body });
+      if (!r.ok) { toast("Couldn't send: " + esc(await r.text())); ta.value = text; showFiles(); return; }
+      picker.value = ""; showFiles();
       pull(); toBottom();
     });
     ta.focus();

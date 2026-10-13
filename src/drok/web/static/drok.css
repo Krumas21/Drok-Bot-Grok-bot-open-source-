@@ -209,12 +209,12 @@ details > summary::-webkit-details-marker { display: none; }
 .convo-sub [data-status-text]::before { content: "· "; }
 .convo-actions { margin-left: auto; display: flex; gap: var(--s2); }
 
-.timeline { flex: 1; overflow-y: auto; padding: var(--s5) var(--s5) var(--s4); scroll-behavior: smooth; }
+.timeline { flex: 1; overflow-y: auto; padding: var(--s5) var(--s5) var(--s4); }
 .timeline-inner { max-width: 820px; margin: 0 auto; }
-.msg {
-  display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--s3); padding: 6px 0;
-  animation: enter 0.35s var(--ease) both;
-}
+.msg { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: var(--s3); padding: 6px 0; }
+/* Only messages that arrive live fade in; opening a chat shows its history at once, already at the bottom. */
+.msg.fresh { animation: enter 0.35s var(--ease) both; }
+.convo.dropping { outline: 2px dashed var(--signal); outline-offset: -8px; }
 @keyframes enter { from { opacity: 0; transform: translateY(6px); } }
 .msg-time { font: 0.7rem var(--mono); color: var(--ink-3); padding-top: 4px; text-align: right; }
 .msg-author { font-weight: 700; font-size: 0.85rem; color: var(--c, var(--ink)); }

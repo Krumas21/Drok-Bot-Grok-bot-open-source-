@@ -5,18 +5,20 @@ import hmac
 import json
 import logging
 import mimetypes
+import shutil
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import FastAPI, Form, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+from .. import commands
 from ..app import App
 from ..db import now
 from ..llm import split_model
@@ -145,11 +147,25 @@ def create_web(drok: App) -> FastAPI:
         m = drok.db.one("SELECT * FROM messages WHERE id = ?", mid)
         return HTMLResponse(render_messages(request, [m] if m else []))
 
+    def _save_upload(f: UploadFile) -> str:
+        dest = drok.inbox_file(f.filename or "file")
+        with dest.open("wb") as out:
+            shutil.copyfileobj(f.file, out)
+        return f"[Owner uploaded a file: /workspace/inbox/{dest.name}]"
+
     @web.post("/c/{cid}/send")
-    async def send(cid: int, text: str = Form(...)):
-        if not text.strip():
+    async def send(cid: int, text: str = Form(""), files: list[UploadFile] = File(default=[])):
+        if not drok.conversation(cid):
+            raise HTTPException(404)
+        files = [f for f in files if f.filename]
+        if not files:
+            if await commands.handle(drok, cid, text, "web") is not None:
+                return {"ok": True}
+        notes = [await asyncio.to_thread(_save_upload, f) for f in files]
+        body = "\n".join([text.strip(), *notes]).strip()
+        if not body:
             raise HTTPException(400, "empty")
-        msg = drok.runtime.user_message(cid, text.strip(), source="web")
+        msg = drok.runtime.user_message(cid, body, source="web")
         return {"id": msg["id"]}
 
     @web.post("/groups")

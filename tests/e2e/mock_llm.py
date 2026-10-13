@@ -6,6 +6,7 @@ Send an agent one of these messages:
   e2e screen                  -> calls computer screenshot
   e2e push                    -> calls shell "git push" (needs approval by default rules)
   e2e handoff                 -> asks forge to run `uname -a`
+  e2e hire                    -> creates a "Ledger" agent (needs approval by default rules)
   anything else               -> plain reply
 After a tool result it replies with a summary of that result. Reviewer prompts always get "allow".
 
@@ -106,6 +107,9 @@ async def completions(request: Request):
         return reply("", "computer", {"action": "screenshot"})
     if cmd.startswith("e2e push"):
         return reply("", "shell", {"command": "cd /workspace && git push origin main"})
+    if cmd.startswith("e2e hire"):
+        return reply("", "agent_create", {"name": "Ledger", "title": "Bookkeeper", "description": "Keeps the books.",
+                                          "instructions": "Track invoices in /workspace/books."})
     if cmd.startswith("e2e handoff"):
         return reply("", "message_agent", {"agent": "forge", "message": "e2e shell: uname -a"})
     if said.startswith("[Reply from"):

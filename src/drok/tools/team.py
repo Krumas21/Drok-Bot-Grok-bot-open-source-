@@ -15,6 +15,23 @@ async def message_agent(ctx: ToolContext, agent: str, message: str) -> str:
     return ctx.app.runtime.handoff(ctx.agent, target, message, ctx.conversation_id, ctx.turn["meta"].get("hops", 0))
 
 
+async def agent_create(ctx: ToolContext, name: str, title: str, description: str, instructions: str,
+                       model: str = "", tools: list | None = None) -> str:
+    app = ctx.app
+    if app.find_agent(name):
+        return f"There is already an agent called '{name}'. Use message_agent, or pick another name."
+    model = model.strip()
+    if model:
+        problem = await app.llm.check(model)
+        if problem:
+            return f"Not created: model {model} didn't answer ({problem[:300]}). Omit model to use yours."
+    a = app.create_agent(name.strip(), title.strip(), description.strip(), instructions.strip(),
+                         model=model or ctx.agent["model"], fallbacks=list(ctx.agent["fallbacks"]),
+                         tools=[str(t).strip() for t in tools or [] if str(t).strip()] or ["*"])
+    return (f"Created {a['name']} (id {a['id']}, {a['title']}) on screen {a['screen']} with {a['model']}. "
+            "Hand them work with message_agent; the owner can edit them on the Agents page.")
+
+
 async def delegate(ctx: ToolContext, tasks: list) -> str:
     return await delegation.run(ctx, [t if isinstance(t, dict) else {"task": str(t)} for t in tasks])
 
@@ -148,6 +165,18 @@ def tools(app) -> list[Tool]:
              "file paths, definition of done. Their reply comes back to you as a new message.",
              params(["agent", "message"], agent=s("Teammate id or name"), message=s("Self-contained request")),
              message_agent, risk="safe", extra=t, subject=lambda a: f"{a.get('agent')}: {a.get('message', '')[:200]}"),
+        Tool("agent_create", "Add a permanent teammate when recurring work fits no one on the team (team lead only). "
+             "They get their own chat, screen and memory and work like any other agent. Write the instructions as "
+             "their role: what they own, how they work, where they keep files, how they report.",
+             params(["name", "title", "description", "instructions"], name=s("Short first name, e.g. Ledger"),
+                    title=s("Role, e.g. Bookkeeper"),
+                    description=s("One or two lines teammates read to decide what to send them"),
+                    instructions=s("Their role instructions (Markdown)"),
+                    model=s("provider/model; omit to use yours"),
+                    tools={"type": "array", "items": {"type": "string"},
+                           "description": "Tool name patterns they may use, e.g. ['browser', 'web_*']; omit for all"}),
+             agent_create, risk="risky", extra={**t, "lead_only": True},
+             subject=lambda a: f"{a.get('name')}: {a.get('title')}"),
         Tool("delegate", "Run 1-6 sub-tasks in parallel on isolated workers that use your tools and return only "
              "their final reports. Use for parallel research, bulk processing, or keeping long side-quests out of "
              "your context. Workers start with zero context - brief them completely. They can't ask the owner or get "

@@ -51,11 +51,13 @@
     </div>
 
     <div class="composer">
-      <form id="composer" action="/c/{{ conv.id }}/send" method="post">
+      <form id="composer" action="/c/{{ conv.id }}/send" method="post" enctype="multipart/form-data">
+        <input type="file" name="files" multiple hidden>
+        <button class="btn" type="button" data-attach title="Attach files - or drop them anywhere on the chat">Attach</button>
         <textarea name="text" rows="1" placeholder="{% if agent %}Message {{ agent.name }}…{% else %}Message the group - @name to assign…{% endif %}" aria-label="Message"></textarea>
         <button class="btn primary" type="submit">Send</button>
       </form>
-      <div class="hint">Enter to send · Shift+Enter for a new line{% if skills %} · ask for a skill by name, e.g. “use {{ skills[0].slug }}”{% endif %}</div>
+      <div class="hint"><strong data-attached></strong>Enter to send · Shift+Enter for a new line · drop files to attach · <code>/help</code> for commands{% if skills %} · ask for a skill by name, e.g. “use {{ skills[0].slug }}”{% endif %}</div>
     </div>
   </section>
 

@@ -134,6 +134,15 @@ class LLM:
         )
         return msg["content"].strip()
 
+    async def check(self, spec: str) -> str:
+        """Why `spec` can't be used, or "" when it answers. One tiny real call: a typo in a model name only shows
+        up as a provider 404, so checking the format alone isn't enough."""
+        try:
+            await self.text(spec, "Reply with: ok", "ping")
+        except LLMError as e:
+            return str(e).removeprefix("All models failed. ")
+        return ""
+
     async def transcribe(self, spec: str, filename: str, data: bytes) -> str:
         provider, name = split_model(spec)
         r = await self.client(provider).audio.transcriptions.create(model=name, file=(filename, data))

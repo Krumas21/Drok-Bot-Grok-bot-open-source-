@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import re
+import time
 from fnmatch import fnmatchcase
 from pathlib import Path
 
@@ -187,7 +188,8 @@ class App:
 
     def tools_for(self, agent: dict) -> dict[str, Tool]:
         patterns = agent["tools"] or ["*"]
-        allowed = {n: t for n, t in self.all_tools().items() if any(fnmatchcase(n, p) for p in patterns)}
+        allowed = {n: t for n, t in self.all_tools().items() if any(fnmatchcase(n, p) for p in patterns)
+                   and (agent["is_orchestrator"] or not t.extra.get("lead_only"))}
         return allowed
 
     def aux_model(self, agent: dict | None) -> str:
@@ -203,6 +205,14 @@ class App:
         for name, defs in self.mcp.tool_defs.items():
             out.append(f"MCP '{name}' ({len(defs)} tools, named mcp_{name}_*)")
         return out
+
+    def inbox_file(self, name: str) -> Path:
+        """Where a file the owner sends lands: /workspace/inbox/<time>_<name>, with a name that is safe to paste
+        into a shell command or a link."""
+        inbox = self.settings.workspace / "inbox"
+        inbox.mkdir(exist_ok=True)
+        safe = re.sub(r"[^\w.\-]+", "_", Path(name).name).strip("._") or "file"
+        return inbox / f"{int(time.time())}_{safe}"
 
     def touch_user(self) -> None:
         """User was here: keeps routines from auto-pausing for absence."""

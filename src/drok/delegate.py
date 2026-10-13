@@ -21,7 +21,7 @@ WORKER_STEPS = 25
 NOT_FOR_WORKERS = {
     "delegate", "message_agent", "memory", "routine_create", "routine_update", "goal_set", "goal_update",
     "clarify", "notify_owner", "request_secret", "request_takeover", "wake_me", "skill_manage", "tool_create",
-    "tool_update", "update_my_instructions", "plan",
+    "tool_update", "update_my_instructions", "plan", "agent_create",
 }
 
 WORKER_SYSTEM = """You are a worker spawned by {parent} ({title}) to complete one task. You know only what is in the \

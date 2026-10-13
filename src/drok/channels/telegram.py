@@ -4,7 +4,6 @@ Long polling, so it works behind home NAT with no public URL. Only TELEGRAM_ALLO
 """
 
 import logging
-import time
 from pathlib import Path
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
@@ -17,6 +16,8 @@ from telegram.ext import (
     filters,
 )
 
+from .. import commands
+
 log = logging.getLogger("drok.telegram")
 
 HELP = """Talk to me normally - I'm your orchestrator and I'll hand work to the team.
@@ -26,7 +27,13 @@ HELP = """Talk to me normally - I'm your orchestrator and I'll hand work to the 
 /goals - open goals and their progress
 /approvals - pending approvals
 /routines - scheduled work
-/stop [agent] - stop current work"""
+/stop [agent] - stop current work
+/new - fresh start (I stop seeing our earlier messages)
+/compress - fold our history into a summary now
+/model [agent|all] [provider/model] - show or switch models
+/retry - run your last message again
+/usage - tokens used today and this week
+Send files or photos and I'll get them in /workspace/inbox."""
 
 
 def chunks(text: str, size: int = 4000):
@@ -54,6 +61,7 @@ class Telegram:
         h(CommandHandler("goals", self.cmd_goals))
         h(CommandHandler("routines", self.cmd_routines))
         h(CommandHandler("stop", self.cmd_stop))
+        h(CommandHandler(["new", "compress", "model", "retry", "usage"], self.cmd_chat))
         h(CallbackQueryHandler(self.on_callback))
         h(MessageHandler(filters.VOICE | filters.AUDIO, self.on_voice))
         h(MessageHandler(filters.PHOTO | filters.Document.ALL, self.on_file))
@@ -201,10 +209,8 @@ class Telegram:
         if m.photo:
             tg_file, name = await m.photo[-1].get_file(), "photo.jpg"
         else:
-            tg_file, name = await m.document.get_file(), Path(m.document.file_name or "file").name
-        inbox = self.app.settings.workspace / "inbox"
-        inbox.mkdir(exist_ok=True)
-        dest = inbox / f"{int(time.time())}_{name}"
+            tg_file, name = await m.document.get_file(), m.document.file_name or "file"
+        dest = self.app.inbox_file(name)
         await tg_file.download_to_drive(dest)
         conv = self._orch_conv()
         if conv:
@@ -298,6 +304,14 @@ class Telegram:
         await update.message.reply_text("\n".join(
             f"#{g['id']} [{g['status']}] {g['title']} - {g['agent_id']}, turn {g['turns_used']}/{g['max_turns']}\n"
             f"   {(g['state'].get('progress') or '-')[:160]}" for g in rows) or "No open goals.")
+
+    async def cmd_chat(self, update: Update, _) -> None:
+        """Commands shared with the web chat; on Telegram they act on the lead agent's conversation."""
+        if not await self._guard(update):
+            return
+        conv = self._orch_conv()
+        reply = await commands.handle(self.app, conv, update.message.text, "telegram") if conv else None
+        await update.message.reply_text(reply or "No lead agent.")
 
     async def cmd_stop(self, update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         if not await self._guard(update):

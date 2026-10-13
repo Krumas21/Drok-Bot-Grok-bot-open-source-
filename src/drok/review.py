@@ -47,7 +47,10 @@ RULES_V2 = [
     ("gmail_draft", "*", "allow", "Drafts are only saved, never sent"),
     ("drive_create_folder", "*", "allow", ""),
 ]
-RULESETS = {1: DEFAULT_RULES, 2: RULES_V2}
+RULES_V3 = [
+    ("agent_create", "*", "ask", "A new agent gets tools and spends tokens - confirm the hire"),
+]
+RULESETS = {1: DEFAULT_RULES, 2: RULES_V2, 3: RULES_V3}
 
 REVIEWER_SYSTEM = """You are the safety reviewer for an autonomous AI agent that runs unattended on its owner's \
 home server. Judge ONE proposed tool call. Reply with JSON only: {"decision": "allow"|"ask"|"deny", "reason": "<short>"}.

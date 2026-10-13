@@ -50,7 +50,7 @@ Scopes requested: Gmail modify (read, label, draft, send - sending always needs 
 3. Put the id in `TELEGRAM_ALLOWED_USER_IDS` and `docker compose up -d` again.
 4. Set `DROK_PUBLIC_URL` to the address you open the UI at, so links in messages work.
 
-Commands: `/agents`, `/ask <agent> <message>`, `/approvals`, `/routines`, `/stop [agent]`, `/help`. Plain messages, photos, files (saved to `/workspace/inbox`) and voice notes go to your lead agent.
+Commands: `/agents`, `/ask <agent> <message>`, `/approvals`, `/goal`, `/goals`, `/routines`, `/stop [agent]`, `/help`, plus the chat commands below. Plain messages, photos, files (saved to `/workspace/inbox`) and voice notes go to your lead agent.
 
 ## Remote access
 
@@ -60,9 +60,27 @@ Don't port-forward the UI to the internet: it controls agents with shell access.
 
 Settings → Connectors. Give a name and either a Streamable HTTP URL or a command (Node is installed in the core image, so `npx -y …` servers work). Environment lines may reference secrets: `GITHUB_PERSONAL_ACCESS_TOKEN={{secret:GITHUB_TOKEN}}`. Tools appear to all agents as `mcp_<server>_<tool>` and go through review.
 
+## Chat commands
+
+Type these in any web chat (or on Telegram, where they act on your lead agent's conversation). Anything else starting with `/` runs the skill of that name.
+
+| Command | Does |
+|---|---|
+| `/new` | Fresh start: the agent stops seeing this chat's earlier messages. Memory, skills and files stay. |
+| `/compress` | Folds the chat's history into its running summary now, keeping the last few messages. |
+| `/model` | Shows models. `/model <provider/model>` switches this chat's agent, `/model <agent> <provider/model>` a named one, `/model all <provider/model>` everyone. A tiny test call runs first, so a typo in a model name is refused instead of breaking the agent. |
+| `/retry` | Runs your last message again (e.g. after a model error). |
+| `/stop` | Stops the current task. |
+| `/usage` | Tokens per agent and model, today and over 7 days. |
+| `/help` | The list. |
+
+## Files
+
+Press **Attach** in a chat or drop files onto it (on Telegram, just send them). Files land in `/workspace/inbox/<time>_<name>` and the agent is told the path; it reads PDFs, Office files, spreadsheets, images and text with `read_file`. Any `/workspace/...` path in a message is a link to that file on the Files page, so deliverables are one click away.
+
 ## Agents
 
-Each agent has: name, title, description (teammates read it to decide who gets a task), role instructions, model + fallbacks, a tool allowlist (`*`, or patterns like `browser, memory_*, message_agent`), and a screen. Mark one as **team lead** - it's the one on Telegram.
+Each agent has: name, title, description (teammates read it to decide who gets a task), role instructions, model + fallbacks, a tool allowlist (`*`, or patterns like `browser, memory_*, message_agent`), and a screen. Mark one as **team lead** - it's the one on Telegram, and the only one that can hire teammates itself (`agent_create`, asks you first by default; a new agent starts with the lead's model).
 
 Starter agents are created from `src/drok/seeds/agents/*.md` on first run only. Edit or delete them freely in the UI.
 
