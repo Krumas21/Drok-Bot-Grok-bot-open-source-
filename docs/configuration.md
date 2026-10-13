@@ -30,6 +30,7 @@ Everything that needs a restart lives in `.env` (start from `.env.example`, or r
 | `DROK_SECRET_KEY` | generated | Fernet key for secrets. Generated into `data/.secret.key` if unset. |
 | `DROK_AUX_MODEL` | reviewer or agent model | Background work: summaries, compression, reflection, goal verification. A fast cheap model is ideal. |
 | `DROK_LEARNING` | `on` | Post-turn reflection that saves memory and skills. |
+| `DROK_JEV_MODEL` | `typesafe/jev-1.13` | Model behind the `decide` tool (needs `OPENROUTER_API_KEY`). `~typesafe/jev-latest` tracks new releases. |
 | `DROK_CONTEXT_CHARS` | `320000` | Compress long turns beyond this (~4 chars per token). Lower it for small-context local models. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | - | OAuth client (type Desktop app) for Gmail, Drive and Calendar. |
 | `GOOGLE_REDIRECT_URI` | `http://localhost:<DROK_PORT>/oauth/google/callback` | Only if you use a Web-application client with HTTPS. |

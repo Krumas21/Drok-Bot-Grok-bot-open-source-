@@ -92,7 +92,7 @@ When a turn's transcript passes `DROK_CONTEXT_CHARS`, the middle is folded into 
 
 | Area | Tools |
 |---|---|
-| Thinking & planning | `think`, `plan`, `clarify`, `goal_set`, `goal_update`, `goal_list`, `wake_me` |
+| Thinking & planning | `think`, `plan`, `clarify`, `decide`, `goal_set`, `goal_update`, `goal_list`, `wake_me` |
 | Memory & learning | `memory`, `recall`, `skill_view`, `skill_manage`, `tool_create`, `tool_update`, `update_my_instructions` |
 | Team | `message_agent`, `delegate`, `notify_owner`, `routine_*`, `request_secret`, `request_takeover` |
 | Computer | `shell` (+ background), `process`, `read_file` (text, images, PDF/DOCX/XLSX…), `write_file`, `edit_file`, `list_files`, `search_files`, `make_file` (docx, pdf, pptx, xlsx, html, epub) |

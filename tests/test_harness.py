@@ -316,3 +316,38 @@ async def test_google_oauth_and_gmail_drive(app):
     (app.settings.workspace / "report.pdf").write_bytes(b"%PDF-1.4")
     assert "https://drive/f1" in await app.all_tools()["drive_upload"].fn(c, path="/workspace/report.pdf")
     assert app.reviewer.match("gmail_send", "to x")["action"] == "ask"
+
+
+# ---------- decide (Jev) ----------
+async def test_decide_drives_main_decisions_with_jev(app, monkeypatch):
+    from drok.llm import Provider
+    from drok.tools import decide as d
+    assert "decide" not in app.all_tools()  # no OpenRouter key, no decision driver
+    app.llm.providers["openrouter"] = Provider("openrouter", "https://openrouter.ai/api/v1", "sk-or-test")
+    sent, odds = [], {"option_1": 0.31, "option_2": 0.74, "option_3": 0.55}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(req.content))
+        assert str(req.url) == d.URL and req.headers["authorization"] == "Bearer sk-or-test"
+        return httpx.Response(200, json={"id": "gen-1", "model": "typesafe/jev-1.13-20260917", "provider": "TypeSafe",
+                                         "answers": {k: {"type": "noul", "noul": v} for k, v in odds.items()},
+                                         "usage": {"input_tokens": 300, "output_tokens": 3, "cost": 0.00001}})
+
+    monkeypatch.setattr(d, "TRANSPORT", httpx.MockTransport(handler))
+    assert "Jev decision driver" in context.system_prompt(app, app.agent("chief"))
+    g = app.goals.create("forge", "Launch", "Ship v1 to paying users", "v1 live with 10 paying users")
+    decide = app.all_tools()["decide"].fn
+    out = await decide(ctx_for(app, meta={"goal_id": g["id"]}), decision="How do we launch?",
+                       options=["Cold email", "Product Hunt", "Paid ads"], success="10 paying users in 30 days",
+                       context="Budget 200 EUR")
+    body = sent[-1]
+    assert body["model"] == "typesafe/jev-1.13" and body["state"]["goal"]["done_when"] == "v1 live with 10 paying users"
+    assert body["questions"]["option_2"]["type"] == "noul" and "Product Hunt" in body["questions"]["option_2"]["instructions"]
+    assert out.index("74%  Product Hunt") < out.index("55%  Paid ads") < out.index("31%  Cold email")
+    assert "Verdict: Product Hunt." in out and "Warning" not in out
+
+    odds.update(option_2=0.40, option_3=0.2)
+    assert "Warning: even the best option" in await decide(ctx_for(app), "Q?", ["A", "B", "C"], "win")
+    assert "Error: give 2-8" in await decide(ctx_for(app), "Q?", ["only one"], "win")
+    odds["option_1"] = 1.5  # Jev's answer is validated, never trusted blindly
+    assert "Jev unavailable (bad answer for option_1" in await decide(ctx_for(app), "Q?", ["A", "B", "C"], "win")

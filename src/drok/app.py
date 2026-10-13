@@ -175,10 +175,10 @@ class App:
 
     # ---------- tools ----------
     def builtin_tools(self) -> list[Tool]:
-        from .tools import computer, custom, google, mind, system, team, web
+        from .tools import computer, custom, decide, google, mind, system, team, web
 
-        return [*mind.tools(self), *system.tools(self), *web.tools(self), *computer.tools(self), *team.tools(self),
-                *custom.management_tools(self), *google.tools(self)]
+        return [*mind.tools(self), *decide.tools(self), *system.tools(self), *web.tools(self), *computer.tools(self),
+                *team.tools(self), *custom.management_tools(self), *google.tools(self)]
 
     def all_tools(self) -> dict[str, Tool]:
         from .tools import custom
@@ -202,6 +202,9 @@ class App:
         email = self.google.email()
         if email:
             out.append(f"Google as {email} (gmail_*, drive_*, calendar_* tools)")
+        if "openrouter" in self.llm.providers:
+            out.append("Jev decision driver (decide tool): put every main decision - strategy, irreversible or costly "
+                       "choices, which approach to take - through decide and act on its verdict")
         for name, defs in self.mcp.tool_defs.items():
             out.append(f"MCP '{name}' ({len(defs)} tools, named mcp_{name}_*)")
         return out
