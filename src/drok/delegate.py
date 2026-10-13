@@ -75,8 +75,8 @@ async def _worker(ctx, i: int, task: dict, tools: dict) -> str:
                 msgs.append({"role": "tool", "tool_call_id": call["id"],
                              "content": await _call(ctx, worker, i, call, tools, brief)})
         msgs.append({"role": "user", "content": "Step budget reached. Stop and report what you have."})
-        reply, _ = await app.llm.chat(parent["model"], context.prepare(msgs, app.settings.context_chars), None,
-                                      parent["fallbacks"], parent["id"])
+        reply, _ = await app.llm.chat(parent["model"], context.prepare(msgs, app.settings.context_chars), schemas,
+                                      parent["fallbacks"], parent["id"], reasoning=parent.get("reasoning", ""))
         return f"{head}\nstatus: stopped at step budget ({calls} tool calls)\n\n{reply['content']}"
     except LLMError as e:
         return f"{head}\nstatus: failed - model error: {e}"

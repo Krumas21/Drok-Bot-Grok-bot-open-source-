@@ -16,7 +16,7 @@ Everything that needs a restart lives in `.env` (start from `.env.example`, or r
 | `TELEGRAM_BOT_TOKEN` | - | From @BotFather. |
 | `TELEGRAM_ALLOWED_USER_IDS` | - | Comma-separated user ids. Empty = the bot only tells people their id. |
 | `DROK_AUTO_REVIEW` | `on` | Reviewer model for risky calls not covered by a rule. `off` = allow them. |
-| `DROK_REVIEWER_MODEL` | agent's model | A fast, cheap model is a good choice. |
+| `DROK_REVIEWER_MODEL` | agent's model | A fast, cheap model is a good choice, e.g. `anthropic/claude-haiku-5-5`. |
 | `DROK_ABSENCE_DAYS` | `14` | Pause all routines after this many days without owner activity (warns a day before). `0` = never. |
 | `DROK_MAX_STEPS` | `40` | Model calls per turn before the agent must report status. |
 | `DROK_SCREENS` | `4` | Virtual screens on the computer. Agents are assigned round-robin; change per agent in the UI. Budget ~400 MB RAM per screen. |
@@ -59,6 +59,15 @@ Don't port-forward the UI to the internet: it controls agents with shell access.
 ## MCP connectors
 
 Settings → Connectors. Give a name and either a Streamable HTTP URL or a command (Node is installed in the core image, so `npx -y …` servers work). Environment lines may reference secrets: `GITHUB_PERSONAL_ACCESS_TOKEN={{secret:GITHUB_TOKEN}}`. Tools appear to all agents as `mcp_<server>_<tool>` and go through review.
+
+## Token costs
+
+Every step of an agent's turn re-sends the whole transcript, so input tokens dominate the bill. What keeps it down:
+
+- **Prompt caching (Claude).** `anthropic/*` models use Claude's native API: each step re-reads the previous one from cache at ~10% of the input price. `/usage` shows how much came from cache.
+- **Effort.** Each agent's *Reasoning effort* (profile page) maps to Claude's effort level; `medium` is a good default for agentic work, `low` for chat.
+- **A cheap background model.** Set `DROK_REVIEWER_MODEL` / `DROK_AUX_MODEL` (e.g. `anthropic/claude-haiku-5-5`) so the safety reviewer and summaries don't run on your agents' model.
+- **Long tool output is cut** to its first and last few thousand characters; agents redirect to a file and page through it with `read_file` when they need everything.
 
 ## Chat commands
 

@@ -266,8 +266,9 @@ class Runtime:
                          "Reply with what is done, what is left, and anything blocking."
                          + (" (Your goal continues in the next turn - call nothing now.)"
                             if turn["meta"].get("goal_id") else "")})
-            reply, _ = await self.app.llm.chat(agent["model"], context.prepare(msgs, st.context_chars), None,
-                                               agent["fallbacks"], agent["id"])
+            # Same tools and effort as every step before, or the cached prefix is lost on the longest request of all.
+            reply, _ = await self.app.llm.chat(agent["model"], context.prepare(msgs, st.context_chars), schemas or None,
+                                               agent["fallbacks"], agent["id"], reasoning=agent.get("reasoning", ""))
             msgs.append(reply)
             return self._finish(agent, turn, msgs, steps, reply["content"])
         except asyncio.CancelledError:

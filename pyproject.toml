@@ -8,6 +8,7 @@ requires-python = ">=3.12"
 authors = [{ name = "Dominykas" }]
 keywords = ["ai", "agents", "multi-agent", "self-hosted", "telegram", "llm", "computer-use"]
 dependencies = [
+    "anthropic>=1.13.0",
     "croniter>=6.2.4",
     "cryptography>=50.0.2",
     "fastapi>=0.143.0",

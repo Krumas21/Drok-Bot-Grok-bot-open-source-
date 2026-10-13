@@ -26,10 +26,13 @@ pre { background: #f5f3ef; padding: 8px; white-space: pre-wrap; } img { max-widt
 </style>"""
 
 
-def _clip(text: str, head: int = 4000, tail: int = 14000) -> str:
+# Every step re-sends earlier tool output, so this is paid again on each later step of the turn. Agents that need all
+# of a long output redirect it to a file and read_file it in pages.
+def _clip(text: str, head: int = 2500, tail: int = 7500) -> str:
     if len(text) <= head + tail:
         return text
-    return f"{text[:head]}\n[... {len(text) - head - tail} chars cut ...]\n{text[-tail:]}"
+    return (f"{text[:head]}\n[... {len(text) - head - tail} chars cut - to see everything, redirect the output to a "
+            f"file and read_file it ...]\n{text[-tail:]}")
 
 
 def _ws_path(ctx: ToolContext, path: str) -> Path:

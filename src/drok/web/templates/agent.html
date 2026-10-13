@@ -29,7 +29,7 @@
           <details class="hint"><summary>available tools</summary>{{ tool_names | join(', ') }}</details></div>
         <div class="field"><label>Screen</label><input name="screen" type="number" min="1" value="{{ a.screen }}"></div>
       </div>
-      <div class="field"><label>Reasoning effort <span class="hint">for models that support it (o-series, GPT-5, Grok, Gemini…); ignored otherwise</span></label>
+      <div class="field"><label>Reasoning effort <span class="hint">for models that support it (Claude, o-series, GPT-5, Grok, Gemini…); ignored otherwise</span></label>
         <select name="reasoning">{% for v, l in [('', 'model default'), ('low', 'low'), ('medium', 'medium'), ('high', 'high')] %}<option value="{{ v }}" {% if a.reasoning == v %}selected{% endif %}>{{ l }}</option>{% endfor %}</select></div>
       <div class="field"><label style="display: flex; gap: 8px; font-weight: 500"><input type="checkbox" name="is_orchestrator" value="1" style="width: auto" {% if a.is_orchestrator %}checked{% endif %}> Team lead (talks to you on Telegram)</label></div>
       <div class="row">

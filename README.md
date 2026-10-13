@@ -129,7 +129,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 - **Browser logins are per screen.** Each screen runs its own Chromium profile, so a login on screen 1 isn't shared with screen 2. Agents sharing a screen share its logins.
 - **No token streaming in the UI** - messages, tool calls and approvals appear step by step.
 - **Unaddressed group messages** go to the lead agent if it's in the group, otherwise the first member. Use `@name` to route.
-- **Anthropic and Gemini** go through their OpenAI-compatible endpoints (no prompt caching yet).
+- **Gemini** goes through its OpenAI-compatible endpoint (no prompt caching). Anthropic models use Claude's native API with prompt caching, so each agent step re-reads the transcript at about a tenth of the input price.
 - **Single owner.** One admin password; not a multi-user product.
 - **Prompt injection is reduced, not eliminated.** Read [docs/security.md](docs/security.md) before giving agents access to accounts that matter.
 

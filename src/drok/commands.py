@@ -71,8 +71,8 @@ async def cmd_model(app, conv, args, source) -> str:
         spec = args[0]
     if not spec:
         shown = targets or members
-        lines = [f"{a['name']}: {a['model']}" + (f" (fallbacks: {', '.join(a['fallbacks'])})" if a["fallbacks"] else "")
-                 for a in shown]
+        lines = [f"{a['name']}: {a['model']}" + (f", effort {a['reasoning']}" if a.get("reasoning") else "")
+                 + (f" (fallbacks: {', '.join(a['fallbacks'])})" if a["fallbacks"] else "") for a in shown]
         lines.append(f"Background work (summaries, compression, reflection): {app.aux_model(shown[0] if shown else None)}")
         return "\n".join(lines) + "\nChange with /model <provider/model>, /model <agent> <provider/model> or /model all …"
     if not targets:
@@ -106,20 +106,24 @@ async def cmd_stop(app, conv, args, source) -> str:
 
 async def cmd_usage(app, conv, args, source) -> str:
     def totals(since: float) -> dict:
-        rows = app.db.all("SELECT agent_id, model, SUM(prompt_tokens) p, SUM(completion_tokens) c FROM usage "
-                          "WHERE created_at > ? GROUP BY agent_id, model", since)
-        return {(r["agent_id"], r["model"]): (r["p"], r["c"]) for r in rows}
+        rows = app.db.all("SELECT agent_id, model, SUM(prompt_tokens) p, SUM(completion_tokens) c, "
+                          "SUM(cache_read_tokens) r FROM usage WHERE created_at > ? GROUP BY agent_id, model", since)
+        return {(r["agent_id"], r["model"]): (r["p"], r["c"], r["r"]) for r in rows}
 
     def k(n: int) -> str:
         return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
+
+    def cached(p: int, r: int) -> str:
+        return f" ({100 * r // p}% from cache)" if p and r else ""
 
     day, week = totals(now() - 86400), totals(now() - 7 * 86400)
     if not week:
         return "No model calls in the last 7 days."
     lines = []
-    for (agent, model), (p, c) in sorted(week.items(), key=lambda kv: -sum(kv[1])):
-        dp, dc = day.get((agent, model), (0, 0))
-        lines.append(f"{agent} · {model}: today {k(dp)} in / {k(dc)} out · 7 days {k(p)} in / {k(c)} out")
+    for (agent, model), (p, c, r) in sorted(week.items(), key=lambda kv: -(kv[1][0] + kv[1][1])):
+        dp, dc, dr = day.get((agent, model), (0, 0, 0))
+        lines.append(f"{agent} · {model}: today {k(dp)} in{cached(dp, dr)} / {k(dc)} out · "
+                     f"7 days {k(p)} in{cached(p, r)} / {k(c)} out")
     return "\n".join(lines)
 
 

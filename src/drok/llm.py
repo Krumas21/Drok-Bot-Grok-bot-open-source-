@@ -15,7 +15,8 @@ from .db import DB, now
 
 log = logging.getLogger("drok.llm")
 
-# ponytail: Anthropic/Gemini via their OpenAI-compat layers (no prompt caching); add native adapters if cost matters.
+# Anthropic models use the native API (claude.py) for prompt caching; the URL here is only its OpenAI-compatible
+# fallback base. ponytail: Gemini still goes through its OpenAI-compat layer (no caching); add an adapter if cost matters.
 PRESETS: dict[str, tuple[str, str]] = {
     "openai": ("OPENAI_API_KEY", "https://api.openai.com/v1"),
     "anthropic": ("ANTHROPIC_API_KEY", "https://api.anthropic.com/v1/"),
@@ -84,6 +85,16 @@ class LLM:
         self.db = db
         self.providers = discover_providers() if providers is None else providers
         self._clients: dict[str, AsyncOpenAI] = {}
+        self._claude = None
+
+    def claude(self):
+        if not self._claude:
+            from .claude import Claude  # imports this module, so loaded on first use
+
+            self.client("anthropic")  # same "not configured" error as every other provider
+            p = self.providers["anthropic"]
+            self._claude = Claude(p.api_key, p.base_url)
+        return self._claude
 
     def client(self, provider: str) -> AsyncOpenAI:
         if provider not in self.providers:
@@ -99,14 +110,24 @@ class LLM:
 
     async def chat(
         self, model: str, messages: list[dict], tools: list[dict] | None = None,
-        fallbacks: list[str] = (), agent_id: str = "", reasoning: str = "",
+        fallbacks: list[str] = (), agent_id: str = "", reasoning: str = "", cache: bool = True,
     ) -> tuple[dict, str]:
-        """Returns (assistant message dict, model actually used). Tries fallbacks in order."""
+        """Returns (assistant message dict, model actually used). Tries fallbacks in order. `cache` marks the request
+        as a prefix later calls will repeat (an agent loop), which only pays off when they do."""
         errors = []
         for spec in [model, *fallbacks]:
             try:
                 provider, name = split_model(spec)
-                kwargs = {"model": name, "messages": messages}
+                if provider == "anthropic":
+                    from .claude import from_anthropic
+
+                    msg = await self.claude().create(name, messages, tools, reasoning, cache)
+                    u = msg.usage
+                    read, written = u.cache_read_input_tokens or 0, u.cache_creation_input_tokens or 0
+                    self._record(agent_id, spec, u.input_tokens + read + written, u.output_tokens, read, written)
+                    return from_anthropic(msg), spec
+                # Raw Claude blocks only make sense to Claude.
+                kwargs = {"model": name, "messages": [{k: v for k, v in m.items() if k != "blocks"} for m in messages]}
                 if tools:
                     kwargs["tools"] = tools
                 if reasoning in ("low", "medium", "high"):
@@ -121,7 +142,8 @@ class LLM:
                     resp = await self.client(provider).chat.completions.create(**kwargs)
                 if not resp.choices:
                     raise LLMError("empty response")
-                self._record(agent_id, spec, resp.usage)
+                if resp.usage:
+                    self._record(agent_id, spec, resp.usage.prompt_tokens or 0, resp.usage.completion_tokens or 0)
                 return _clean(resp.choices[0].message), spec
             except Exception as e:  # noqa: BLE001 - any provider failure moves on to the next fallback
                 log.warning("model %s failed: %s", spec, e)
@@ -130,7 +152,8 @@ class LLM:
 
     async def text(self, model: str, system: str, prompt: str, agent_id: str = "") -> str:
         msg, _ = await self.chat(
-            model, [{"role": "system", "content": system}, {"role": "user", "content": prompt}], agent_id=agent_id
+            model, [{"role": "system", "content": system}, {"role": "user", "content": prompt}], agent_id=agent_id,
+            cache=False,  # one-off prompts: a cache write would cost extra and never be read
         )
         return msg["content"].strip()
 
@@ -155,10 +178,12 @@ class LLM:
         )
         return r.content
 
-    def _record(self, agent_id: str, spec: str, usage) -> None:
-        if not (self.db and usage):
+    def _record(self, agent_id: str, spec: str, prompt: int, completion: int, cache_read: int = 0,
+                cache_write: int = 0) -> None:
+        """prompt counts every input token; cache_read/cache_write say how many of them were billed as cache."""
+        if not self.db:
             return
         self.db.insert(
-            "usage", agent_id=agent_id or "-", model=spec, created_at=now(),
-            prompt_tokens=usage.prompt_tokens or 0, completion_tokens=usage.completion_tokens or 0,
+            "usage", agent_id=agent_id or "-", model=spec, created_at=now(), prompt_tokens=prompt,
+            completion_tokens=completion, cache_read_tokens=cache_read, cache_write_tokens=cache_write,
         )

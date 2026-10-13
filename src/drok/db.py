@@ -216,6 +216,8 @@ END;
 # Columns added after a table first shipped: (table, column, declaration). Applied idempotently on start.
 MIGRATIONS = [
     ("agents", "reasoning", "TEXT NOT NULL DEFAULT ''"),
+    ("usage", "cache_read_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("usage", "cache_write_tokens", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 JSON_COLUMNS = {"fallbacks", "tools", "members", "meta", "llm_messages", "args", "env", "plan", "state",

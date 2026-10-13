@@ -28,6 +28,7 @@ async def agent_create(ctx: ToolContext, name: str, title: str, description: str
     a = app.create_agent(name.strip(), title.strip(), description.strip(), instructions.strip(),
                          model=model or ctx.agent["model"], fallbacks=list(ctx.agent["fallbacks"]),
                          tools=[str(t).strip() for t in tools or [] if str(t).strip()] or ["*"])
+    app.db.update("agents", a["id"], reasoning=ctx.agent.get("reasoning", ""))  # same effort as the lead
     return (f"Created {a['name']} (id {a['id']}, {a['title']}) on screen {a['screen']} with {a['model']}. "
             "Hand them work with message_agent; the owner can edit them on the Agents page.")
 
